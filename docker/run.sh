@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DOCKER_IMAGE="icart_mini_navigation:latest"
-CONTAINER_NAME="icart_mini_navigation"
+DOCKER_IMAGE="icart_mini_ros2:latest"
+CONTAINER_NAME="icart_mini_ros2"
 
 docker run --rm -it \
     --env DISPLAY=localhost:11.0 \

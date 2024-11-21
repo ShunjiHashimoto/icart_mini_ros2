@@ -1,5 +1,5 @@
-# FROM arm64v8/ros:humble-perception
-FROM osrf/ros:humble-desktop-full
+FROM arm64v8/ros:humble-perception
+#FROM osrf/ros:humble-desktop-full
 
 # キーボード設定の選択を省略
 ARG DEBIAN_FRONTEND=noninteractive
@@ -23,8 +23,8 @@ RUN apt-get update && apt-get install -y \
 # Install python packages
 RUN apt-get install -y \
   python3-pykdl \
-  python3-pip 
-  # python3-libgpiod
+  python3-pip \
+  python3-libgpiod
 
 # Install ROS packages
 RUN apt-get update && apt-get install -y \
