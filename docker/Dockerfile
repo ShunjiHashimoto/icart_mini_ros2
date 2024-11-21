@@ -18,7 +18,9 @@ RUN apt-get update && apt-get install -y \
   libfreetype6-dev \
   libpng-dev \
   iputils-ping \
-  net-tools
+  net-tools \
+  libmodbus-dev \
+  tree
 
 # Install python packages
 RUN apt-get install -y \
@@ -31,7 +33,12 @@ RUN apt-get update && apt-get install -y \
   ros-humble-urg-node \
   ros-humble-sensor-msgs \
   ros-humble-rviz2 \
-  ros-humble-rmw-cyclonedds-cpp && \
+  ros-humble-rmw-cyclonedds-cpp \
+  ros-humble-geometry-msgs \
+  ros-humble-nav-msgs \
+  ros-humble-tf2 \
+  ros-humble-tf2-geomery-msgs \
+  ros-humble-rclcpp && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV RMW_IMPLEMENTATION rmw_cyclonedds_cpp
