@@ -37,7 +37,6 @@ RUN apt-get update && apt-get install -y \
   ros-humble-geometry-msgs \
   ros-humble-nav-msgs \
   ros-humble-tf2 \
-  ros-humble-tf2-geomery-msgs \
   ros-humble-rclcpp && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -49,8 +48,8 @@ RUN pip install --no-cache-dir \
   pyserial==3.5 \
   pykalman==0.9.7 \
   spidev==3.6 \
-  # rpi-lgpio==0.6 \
-  # gpiozero==2.0.1 \
+  rpi-lgpio==0.6 \
+  gpiozero==2.0.1 \
   transforms3d==0.4.2 \
   matplotlib==3.9.0
 
@@ -70,5 +69,6 @@ RUN mkdir -p /root/ros2_ws/src
 WORKDIR /root/ros2_ws/src
 
 RUN echo 'source ~/ros2_ws/before_bringup.sh' >> ~/.bashrc
-RUN echo 'alias cm="cd ~/ros2_ws && colcon build --symlink-install --packages-select icart_mini_navigation"' >> ~/.bashrc
+RUN echo 'alias cm="cd ~/ros2_ws && colcon build --symlink-install --packages-select icart_mini_ros2"' >> ~/.bashrc
 RUN echo 'alias leg="cd ~/ros2_ws/src/leg_tracker_ros2"' >> ~/.bashrc
+RUN echo 'alias build2="colcon build --symlink-install"' >> ~/.bashrc
