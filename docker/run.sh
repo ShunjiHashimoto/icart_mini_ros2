@@ -7,7 +7,7 @@ docker run --rm -it \
     --env DISPLAY=localhost:11.0 \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v ~/.Xauthority:/root/.Xauthority:ro \
-    --volume="${HOME}/ros2_ws:/root/ros2_ws" \
+    --volume="${HOME}/icart_ws:/root/icart_ws" \
     --name=$CONTAINER_NAME \
     -e TZ=Asia/Tokyo \
     --privileged \
