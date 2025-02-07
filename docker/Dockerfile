@@ -37,6 +37,8 @@ RUN apt-get update && apt-get install -y \
   ros-humble-geometry-msgs \
   ros-humble-nav-msgs \
   ros-humble-tf2 \
+  ros-humble-joy \ 
+  ros-humble-teleop-twist-joy \
   ros-humble-rclcpp && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -65,8 +67,8 @@ CMD ["bash"]
 
 # Create ROS workspace
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
-RUN mkdir -p /root/ros2_ws/src
-WORKDIR /root/ros2_ws/src
+RUN mkdir -p /root/icart_ws/src
+WORKDIR /root/icart_ws/src
 
 RUN echo 'source ~/ros2_ws/before_bringup.sh' >> ~/.bashrc
 RUN echo 'alias cm="cd ~/ros2_ws && colcon build --symlink-install --packages-select icart_mini_ros2"' >> ~/.bashrc
