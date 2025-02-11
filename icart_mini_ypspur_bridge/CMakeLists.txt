@@ -33,6 +33,9 @@ ament_target_dependencies(
   "tf2_ros"
 )
 
+# YPSpur のライブラリをリンク
+target_link_libraries(icart_mini_ypspur_bridge ypspur)
+
 install(TARGETS icart_mini_ypspur_bridge
   DESTINATION lib/${PROJECT_NAME})
 

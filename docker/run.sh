@@ -14,3 +14,4 @@ docker run --rm -it \
     --net=host \
     $DOCKER_IMAGE \
     bash
+

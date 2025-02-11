@@ -70,7 +70,5 @@ RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
 RUN mkdir -p /root/icart_ws/src
 WORKDIR /root/icart_ws/src
 
-RUN echo 'source ~/ros2_ws/before_bringup.sh' >> ~/.bashrc
-RUN echo 'alias cm="cd ~/ros2_ws && colcon build --symlink-install --packages-select icart_mini_ros2"' >> ~/.bashrc
-RUN echo 'alias leg="cd ~/ros2_ws/src/leg_tracker_ros2"' >> ~/.bashrc
-RUN echo 'alias build2="colcon build --symlink-install"' >> ~/.bashrc
+RUN echo 'source /root/icart_ws/src/icart_mini_ros2/docker/before_bringup.sh' >> ~/.bashrc
+RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select icart_mini_ros2"' >> ~/.bashrc
