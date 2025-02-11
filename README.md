@@ -10,14 +10,8 @@ $~/icart_ws/src/icart_mini_ros2/docker# ./run.sh
 ```
 
 ## ypspur Build
-```bash
-$ cd icart_ws/build
-$ cmake ..
-$ make
-$ sudo make install
-$ sudo ldconfig
-```
-ldconfig は、共有ライブラリのキャッシュを更新し、ライブラリのリンクを管理するコマンド です。
+ローカルPCであらかじめビルドをしておく。  
+コンテナ立ち上げ時に、entrypoint.shにてビルドされたライブラリのパスを通す。  
 
 ## joy node
 joy_nodeを起動後、teleop_twist_joyを実行し、/joy->/cmd_velに変換する
