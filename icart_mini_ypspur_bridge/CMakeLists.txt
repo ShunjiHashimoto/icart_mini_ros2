@@ -36,8 +36,16 @@ ament_target_dependencies(
 # YPSpur のライブラリをリンク
 target_link_libraries(icart_mini_ypspur_bridge ypspur)
 
-install(TARGETS icart_mini_ypspur_bridge
-  DESTINATION lib/${PROJECT_NAME})
+install(TARGETS icart_mini_ypspur_bridge 
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
