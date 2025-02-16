@@ -32,6 +32,7 @@ RUN apt-get install -y \
 RUN apt-get update && apt-get install -y \
   ros-humble-urg-node \
   ros-humble-sensor-msgs \
+  ros-humble-xacro \
   ros-humble-rviz2 \
   ros-humble-rmw-cyclonedds-cpp \
   ros-humble-geometry-msgs \
@@ -39,6 +40,7 @@ RUN apt-get update && apt-get install -y \
   ros-humble-tf2 \
   ros-humble-joy \ 
   ros-humble-teleop-twist-joy \
+  ros-humble-joint-state-publisher-gui \
   ros-humble-rclcpp && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
