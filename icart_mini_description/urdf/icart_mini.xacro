@@ -48,7 +48,7 @@
   </link>
 
   <!-- Left Wheel -->
-  <joint type="continuous" name="left_wheel_hinge">
+  <joint type="continuous" name="left_wheel_joint">
     <axis xyz="0 0 1"/>
     <parent link="base_link"/>
     <child link="left_wheel"/>
@@ -66,7 +66,7 @@
   </link>
   
   <!-- Right Wheel -->
-  <joint type="continuous" name="right_wheel_hinge">
+  <joint type="continuous" name="right_wheel_joint">
     <axis xyz="0 0 1"/>
     <parent link="base_link"/>
     <child link="right_wheel"/>
