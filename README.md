@@ -21,5 +21,5 @@ $ ./run.sh
 # terminal 1
 $ ros2 launch icart_mini_bringup icart_mini_bringup.launch.py 
 # terminal 2
-$ rviz2
+$ ros2 launch icart_mini_description icart_mini_display.launch.py
 ```
