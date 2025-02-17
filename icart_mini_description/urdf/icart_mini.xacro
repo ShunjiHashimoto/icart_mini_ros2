@@ -21,10 +21,10 @@
     <visual>
       <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
       <geometry> 
-        <box size="0.35 0.18 0.4"/>
+        <box size="0.4 0.18 0.4"/>
       </geometry>
       <material name="white">
-        <color rgba="1.0 1.0 1.0 1.0"/>
+        <color rgba="1.0 1.0 1.0 0.5"/>
       </material>
     </visual>
     <visual name="back_wheel">
@@ -42,7 +42,7 @@
         <cylinder  length="0.03" radius="0.04625"/>
       </geometry>
       <material name="white">
-        <color rgba="1.0 1.0 1.0 1.0"/>
+        <color rgba="1.0 1.0 1.0 0.5"/>
       </material>
     </visual>
   </link>
@@ -60,7 +60,7 @@
         <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
       </geometry>
       <material name="gray">
-        <color rgba="0.2 0.2 0.2 1"/>
+        <color rgba="0.2 0.2 0.2 1.0"/>
       </material>
     </visual>
   </link>
@@ -86,18 +86,18 @@
   <!-- LiDAR -->
   <joint name="scan_joint" type="fixed">
     <axis xyz="0 1 0"/>
-    <origin xyz="0 0 0.2" rpy="0 0 0 "/>
+    <origin xyz="0.15 0 0.18" rpy="0 0 0 "/>
     <parent link="base_link"/>
-    <child link="base_scan"/>
+    <child link="laser"/>
   </joint>
-  <link name="base_scan">
+  <link name="laser">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0 "/>
       <geometry>
         <box size="0.1 0.1 0.1"/>
       </geometry>
       <material name="red">
-        <color rgba="1 0 0 1"/>
+        <color rgba="1 0 0 0.5"/>
       </material>
     </visual>
   </link>
