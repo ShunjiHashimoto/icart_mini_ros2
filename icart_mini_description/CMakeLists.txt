@@ -9,8 +9,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(xacro REQUIRED)
 find_package(robot_state_publisher REQUIRED)
-# QUIET: CMakeのビルドエラーは防ぐ
-# find_package(joint_state_publisher QUIET)
 find_package(rviz2 REQUIRED)
 
 install(

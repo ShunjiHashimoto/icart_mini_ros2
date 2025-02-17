@@ -82,5 +82,24 @@
       </material>
     </visual>
   </link>
+
+  <!-- LiDAR -->
+  <joint name="scan_joint" type="fixed">
+    <axis xyz="0 1 0"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0 "/>
+    <parent link="base_link"/>
+    <child link="base_scan"/>
+  </joint>
+  <link name="base_scan">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0 "/>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+  </link>
   
 </robot>
