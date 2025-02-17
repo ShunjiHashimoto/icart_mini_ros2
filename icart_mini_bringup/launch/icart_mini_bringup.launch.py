@@ -5,19 +5,19 @@ from launch_ros.substitutions import FindPackageShare
 import os
 
 def generate_launch_description():
-    icart_mini_display_launch = IncludeLaunchDescription(
+    urg_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
-                FindPackageShare("icart_mini_description").find("icart_mini_description"),
+                FindPackageShare("urg_node2").find("urg_node2"),
                 "launch",
-                "icart_mini_display.launch.py"
+                "urg_node2.launch.py"
             )
         )
     )
 
     return LaunchDescription([
         # icart_mini_description の launch
-        # icart_mini_display_launch,
+        urg_launch,
 
         # ypspur-coordinator の起動
         ExecuteProcess(
