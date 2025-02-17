@@ -1,5 +1,5 @@
 # icart_mini_ros2
-
+屋内外用の小型移動ロボットフレーム「i-Cart mini」のROS 2パッケージ  
 <img src=docs/imgs/icart_mini.png width=50%>
 <img src=docs/imgs/icart_urdf.png width=70%>
 
@@ -16,7 +16,7 @@ $ ./run.sh
 コンテナ立ち上げ時に、entrypoint.shにてビルドされたライブラリのパスを通す。  
 
 # Quick Start
-## Bringup iCartMini
+## Bringup iCart-Mini
 ```bash
 # terminal 1
 $ ros2 launch icart_mini_bringup icart_mini_bringup.launch.py 
