@@ -1,8 +1,14 @@
 # icart_mini_ros2
 屋内外用の小型移動ロボットフレーム「[i-Cart mini](https://t-frog.com/products/icart_mini/)」のROS 2パッケージ
-<img src=docs/imgs/icart_mini.png width=50%>  
+<img src=docs/imgs/icart_mini.png width=40%>  
 <img src=docs/imgs/icart_urdf.png width=38%> <img src=docs/imgs/icart_rviz.png width=60%>
 
+# System Requirements
+- Hardware: Raspberry Pi 5
+- OS: Ubuntu23.10
+- ROS2: humble
+- Sensor: Hokuyo [UST-10LX](https://www.hokuyo-aut.co.jp/search/single.php?serial=16&utm_source=google&utm_medium=cpc&utm_campaign=[P-MAX]&gad_source=1&gclid=Cj0KCQiAwtu9BhC8ARIsAI9JHam6cR3BVtNZ746VwLahng9sImtlVbThGx0BkbivMfSW7eK9brOBjaYaAjHhEALw_wcB#spec)
+- Battery: LONG 鉛蓄電池12V x2
 # Setup
 ## Docker Build & Run
 ```bash
@@ -21,7 +27,7 @@ $ ros2 launch icart_mini_description icart_mini_display.launch.py
 ```
 
 # Required Packages
-## YP-Spur 
+## YP-Spur(YamabicoProject-Spur) 
 [Yp-Spur](https://github.com/openspur/yp-spur)は、移動ロボット用のオープンソースソフトウェアで、ロボットのモーションコントロールをシンプルかつ効率的に行うためのツールです。ビルド方法はYp-SpurのGitHubページを参照ください。      
 
 ## urg_node2
