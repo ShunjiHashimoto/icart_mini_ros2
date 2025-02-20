@@ -11,10 +11,6 @@ $ docker build -t icart_mini_ros2:latest .
 $ ./run.sh 
 ```
 
-## ypspur Build
-ローカルPCであらかじめビルドをしておく。  
-コンテナ立ち上げ時に、entrypoint.shにてビルドされたライブラリのパスを通す。  
-
 # Quick Start
 ## Bringup iCart-Mini
 ```bash
@@ -23,3 +19,13 @@ $ ros2 launch icart_mini_bringup icart_mini_bringup.launch.py
 # terminal 2
 $ ros2 launch icart_mini_description icart_mini_display.launch.py
 ```
+
+# Required Packages
+## YP-Spur 
+[Yp-Spur](https://github.com/openspur/yp-spur)は、移動ロボット用のオープンソースソフトウェアで、ロボットのモーションコントロールをシンプルかつ効率的に行うためのツールです。ビルド方法はYp-SpurのGitHubページを参照ください。      
+
+## urg_node2
+[urg_node2](https://github.com/ShunjiHashimoto/urg_node2.git)は、Hokuyo製LiDARセンサーのデータをROS 2トピックとして配信するためのパッケージ
+
+## i-Cart
+[i-Cart](https://github.com/BND-tc/i-Cart)は、i-Cartシリーズのモデルデータおよびパラメータファイル
