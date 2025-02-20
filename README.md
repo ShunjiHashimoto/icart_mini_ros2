@@ -1,14 +1,19 @@
 # icart_mini_ros2
 屋内外用の小型移動ロボットフレーム「[i-Cart mini](https://t-frog.com/products/icart_mini/)」のROS 2パッケージ
-<img src=docs/imgs/icart_mini.png width=40%>  
-<img src=docs/imgs/icart_urdf.png width=38%> <img src=docs/imgs/icart_rviz.png width=60%>
+<img src=.docs/imgs/icart_mini.png width=40%>  
+<img src=.docs/imgs/icart_urdf.png width=38%> <img src=.docs/imgs/icart_rviz.png width=60%>
 
 # System Requirements
 - Hardware: Raspberry Pi 5
 - OS: Ubuntu23.10
 - ROS 2: humble
+- Docker: version 26.0.0
 - Sensor: Hokuyo [UST-10LX](https://www.hokuyo-aut.co.jp/search/single.php?serial=16&utm_source=google&utm_medium=cpc&utm_campaign=[P-MAX]&gad_source=1&gclid=Cj0KCQiAwtu9BhC8ARIsAI9JHam6cR3BVtNZ746VwLahng9sImtlVbThGx0BkbivMfSW7eK9brOBjaYaAjHhEALw_wcB#spec)
 - Battery: LONG 鉛蓄電池12V x2
+  - Raspberry Pi 5用の電源として使用するために、DCDC24V->5Vに降圧する電圧レギュレータ（DROK製 型番：090011_JPN）を使用
+- MotorDriver
+- Motor
+
 # Setup
 ### Docker Build & Run
 ```bash
@@ -35,3 +40,12 @@ $ ros2 launch icart_mini_description icart_mini_display.launch.py
 
 ### i-Cart
 [i-Cart](https://github.com/BND-tc/i-Cart)は、i-Cartシリーズのモデルデータおよびパラメータファイル
+
+# Technical Overview
+### Preprocessing
+- ノイズ除去
+- ダウンサンプリング　など
+
+### Clustering
+点群データをクラスタリングし、特定のクラスタのみを追従する
+<img src=.docs/imgs/clustering.png width=50%>

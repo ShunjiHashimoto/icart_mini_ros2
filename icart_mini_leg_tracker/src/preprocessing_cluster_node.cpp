@@ -9,7 +9,8 @@
 
 #define MAX_NOISE_DISTANCE_THRESH 0.003  // ノイズ除去距離閾値
 #define MAX_SAMPLING_INTERVAL 0.001      // ダウンサンプリング間隔
-#define CLUSTER_DISTANCE_THRESH 0.1     // クラスタ間の距離閾値
+#define CLUSTER_DISTANCE_THRESH 0.5     // クラスタ間の距離閾値
+#define MIN_CLUSTER_SIZE 5               // 最小クラスタサイズの閾値 
 
 class PreprocessingClusterNode : public rclcpp::Node {
 public:
@@ -36,8 +37,9 @@ private:
         removeNoise(points);
         downSampling(points);
         auto clusters = makeClusters(points);
-        publishClusterMarkers(points, clusters);
-        publishClusterCenters(points, clusters);
+        auto colors = generateColors(*std::max_element(clusters.begin(), clusters.end()));
+        publishClusterMarkers(points, clusters, colors);
+        publishClusterCenters(points, clusters, colors);
     }
 
     std::vector<geometry_msgs::msg::Point> generateXYPoints(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
@@ -100,7 +102,7 @@ private:
         return clusters;
     }
 
-    void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters) {
+    void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters, const std::vector<std_msgs::msg::ColorRGBA> &colors) {
         visualization_msgs::msg::Marker marker;
         marker.header.frame_id = "laser";
         marker.header.stamp = this->get_clock()->now();
@@ -108,11 +110,9 @@ private:
         marker.id = 0;
         marker.type = visualization_msgs::msg::Marker::POINTS;
         marker.action = visualization_msgs::msg::Marker::ADD;
-        marker.scale.x = 0.03;
-        marker.scale.y = 0.03;
+        marker.scale.x = 0.01;
+        marker.scale.y = 0.01;
         marker.color.a = 1.0;
-
-        std::vector<std_msgs::msg::ColorRGBA> colors = generateColors(*std::max_element(clusters.begin(), clusters.end()));
 
         for (size_t i = 0; i < points.size(); i++) {
             if (points[i].x != 0.0 || points[i].y != 0.0) {
@@ -123,20 +123,7 @@ private:
         cluster_marker_publisher_->publish(marker);
     }
 
-    std::vector<std_msgs::msg::ColorRGBA> generateColors(int num_clusters) {
-        std::vector<std_msgs::msg::ColorRGBA> colors(num_clusters);
-        std::mt19937 rng(42);
-        std::uniform_real_distribution<float> dist(0.0, 1.0);
-        for (auto &color : colors) {
-            color.r = dist(rng);
-            color.g = dist(rng);
-            color.b = dist(rng);
-            color.a = 1.0;
-        }
-        return colors;
-    }
-
-    void publishClusterCenters(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters) {
+    void publishClusterCenters(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters, const std::vector<std_msgs::msg::ColorRGBA> &colors) {
         visualization_msgs::msg::Marker center_marker;
         center_marker.header.frame_id = "laser";
         center_marker.header.stamp = this->get_clock()->now();
@@ -157,22 +144,34 @@ private:
         }
 
         for (auto &[id, pts] : cluster_points) {
-            geometry_msgs::msg::Point center;
-            center.x = 0.0;
-            center.y = 0.0;
-            for (auto &p : pts) {
-                center.x += p.x;
-                center.y += p.y;
+            if (pts.size() >= MIN_CLUSTER_SIZE) {
+                geometry_msgs::msg::Point center;
+                center.x = 0.0;
+                center.y = 0.0;
+                for (auto &p : pts) {
+                    center.x += p.x;
+                    center.y += p.y;
+                }
+                center.x /= pts.size();
+                center.y /= pts.size();
+                center_marker.points.push_back(center);
+                center_marker.colors.push_back(colors[id % colors.size()]);  // クラスタと同じ色を使用
             }
-            center.x /= pts.size();
-            center.y /= pts.size();
-            center_marker.points.push_back(center);
         }
-        center_marker.color.r = 1.0;
-        center_marker.color.g = 1.0;
-        center_marker.color.b = 0.0;
-        center_marker.color.a = 1.0;
         center_marker_publisher_->publish(center_marker);
+    }
+
+    std::vector<std_msgs::msg::ColorRGBA> generateColors(int num_clusters) {
+        std::vector<std_msgs::msg::ColorRGBA> colors(num_clusters);
+        std::mt19937 rng(42);
+        std::uniform_real_distribution<float> dist(0.0, 1.0);
+        for (auto &color : colors) {
+            color.r = dist(rng);
+            color.g = dist(rng);
+            color.b = dist(rng);
+            color.a = 1.0;
+        }
+        return colors;
     }
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
