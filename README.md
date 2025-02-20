@@ -1,5 +1,5 @@
 # icart_mini_ros2
-屋内外用の小型移動ロボットフレーム「i-Cart mini」のROS 2パッケージ  
+屋内外用の小型移動ロボットフレーム「[i-Cart mini](https://t-frog.com/products/icart_mini/)」のROS 2パッケージ
 <img src=docs/imgs/icart_mini.png width=50%>  
 <img src=docs/imgs/icart_urdf.png width=38%> <img src=docs/imgs/icart_rviz.png width=60%>
 
