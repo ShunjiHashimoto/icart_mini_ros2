@@ -46,10 +46,10 @@ private:
         removeNoise(points);
         downSampling(points);
         auto clusters = makeClusters(points);
-
         std::map<int, geometry_msgs::msg::Point> cluster_centers = calculateClusterCenters(points, clusters);
 
-        trackClusters(cluster_centers);  // トラッキング処理を追加
+        trackClusters(cluster_centers); 
+        followTarget(cluster_centers);
 
         publishClusterMarkers(points, clusters);  
         publishMatchedClusterCenters(cluster_centers);
@@ -203,6 +203,29 @@ private:
             std::cout << "現在のクラスタ: " << current_id  << " | マッピング後のクラスタ番号: " << previous_id << std::endl;
         }
         std::cout << "----------------------------------------" << std::endl;
+    }
+
+    void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
+        if (cluster_centers.empty()) return;
+
+        // 最も近いクラスタを追従対象とする
+        double min_distance = std::numeric_limits<double>::max();
+        geometry_msgs::msg::Point target_pos;
+        int target_id;
+        for (auto &[current_id, current_center] : cluster_centers) {
+            double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);
+            if (dist < min_distance) {
+                min_distance = dist;
+                target_pos = current_center;
+                target_id = current_id;
+            }
+        }
+
+        // 追従対象に向かうための移動指令（例：ロボットの進行方向と距離）
+        double angle_to_target = atan2(target_pos.y, target_pos.x);
+        double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
+
+        RCLCPP_INFO(this->get_logger(), "追従対象ID %d: 距離: %.2f m, 角度: %.2f 度", target_id, distance_to_target, angle_to_target * 180 / M_PI);
     }
 
     void publishClusterMarkers(
