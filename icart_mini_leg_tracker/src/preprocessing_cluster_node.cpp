@@ -12,7 +12,7 @@
 #define MAX_SAMPLING_INTERVAL 0.001      // ダウンサンプリング間隔
 #define MIN_CLUSTER_SIZE 10               // 最小クラスタサイズの閾値 
 #define MAX_CLUSTER_SIZE 100               // 最小クラスタサイズの閾値 
-#define CLUSTER_MATCHED_THRESH 0.3  // クラスタマッチ距離閾値
+#define CLUSTER_MATCHED_THRESH 0.5  // クラスタマッチ距離閾値
 
 class PreprocessingClusterNode : public rclcpp::Node {
 public:
@@ -36,7 +36,7 @@ public:
 
 private:
     std::map<int, int> cluster_id_mapping_;  // <現在のクラスタIndex, 前回のクラスタID>
-    std::vector<geometry_msgs::msg::Point> previous_cluster_centers_;
+    std::map<int, geometry_msgs::msg::Point> previous_cluster_centers_;
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_ = 1;
     bool is_first_frame_ = true;  // 最初のフレームかどうかを判定
@@ -47,13 +47,12 @@ private:
         downSampling(points);
         auto clusters = makeClusters(points);
 
-        std::set<int> valid_cluster_ids;
-        auto cluster_centers = calculateClusterCenters(points, clusters, valid_cluster_ids);
+        std::map<int, geometry_msgs::msg::Point> cluster_centers = calculateClusterCenters(points, clusters);
 
         trackClusters(cluster_centers);  // トラッキング処理を追加
 
-        publishClusterMarkers(points, clusters, valid_cluster_ids);  
-        publishMatchedClusterCenters(cluster_centers, valid_cluster_ids);  
+        publishClusterMarkers(points, clusters);  
+        publishMatchedClusterCenters(cluster_centers);
     }
     
     std::vector<geometry_msgs::msg::Point> generateXYPoints(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
@@ -98,7 +97,6 @@ private:
     std::vector<int> makeClusters(const std::vector<geometry_msgs::msg::Point> &points, double distance_threshold = 0.05625) {
         std::vector<int> clusters(points.size(), 0);
         int cluster_id = 1;
-
         for (size_t i = 0; i < points.size(); i++) {
             if (points[i].x == 0.0 && points[i].y == 0.0) continue;
             if (clusters[i] == 0) {
@@ -120,13 +118,11 @@ private:
         return clusters;
     }
 
-    std::vector<geometry_msgs::msg::Point> calculateClusterCenters(
+    std::map<int, geometry_msgs::msg::Point> calculateClusterCenters(
         const std::vector<geometry_msgs::msg::Point> &points, 
-        const std::vector<int> &clusters, 
-        std::set<int> &valid_cluster_ids)
+        const std::vector<int> &clusters)
         {
         std::map<int, std::vector<geometry_msgs::msg::Point>> cluster_points;
-
         // クラスタごとに点を集める
         for (size_t i = 0; i < points.size(); i++) {
             if (clusters[i] > 0) {
@@ -134,7 +130,7 @@ private:
             }
         }
 
-        std::vector<geometry_msgs::msg::Point> cluster_centers;
+        std::map<int, geometry_msgs::msg::Point> cluster_centers;
         // 各クラスタの中心を計算
         for (auto &[id, pts] : cluster_points) {
             if (pts.size() >= MIN_CLUSTER_SIZE && pts.size() <= MAX_CLUSTER_SIZE) {
@@ -148,9 +144,18 @@ private:
                 center.x /= pts.size();
                 center.y /= pts.size();
                 center.z = 0.0;
-                cluster_centers.push_back(center);
-                valid_cluster_ids.insert(id);
+                cluster_centers[id] = center;
             }
+        }
+
+        // クラスタごとにIDと中心座標を出力
+        for (const auto &pair : cluster_centers) {
+            int cluster_id = pair.first;                         // クラスタID
+            const geometry_msgs::msg::Point &center = pair.second; // 中心座標
+
+            std::cout << "クラスタID: " << cluster_id 
+                    << " | 中心座標: (" << center.x << ", " << center.y << ", " << center.z << ")" 
+                    << std::endl;
         }
         return cluster_centers;
     }
@@ -160,38 +165,49 @@ private:
     }
 
     // 前回のクラスタをもとにトラッキング
-    void trackClusters(const std::vector<geometry_msgs::msg::Point> &current_centers) {
+    void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
         cluster_id_mapping_.clear();
-        std::vector<bool> matched_previous(previous_cluster_centers_.size(), false);
+        std::map<int, bool> matched_previous;
+        
+        // 前回のクラスタをまだマッチしていない状態に初期化
+        for (const auto &prev_cluster : previous_cluster_centers_) {
+            matched_previous[prev_cluster.first] = false;
+        }
 
-        for (size_t i = 0; i < current_centers.size(); i++) {
+        // 現在のクラスタを順番に処理
+        for (auto &[current_id, current_center] : current_centers) {
             double min_distance = std::numeric_limits<double>::max();
             int matched_id = -1;
-            for (size_t j = 0; j < previous_cluster_centers_.size(); j++) {
-                double dist = calculateDistance(current_centers[i], previous_cluster_centers_[j]);
-                if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance && !matched_previous[j]) {  // 0.3m以内で一致
+
+            // 前回のクラスタと比較して最も近いクラスタを探す
+            for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
+                double dist = calculateDistance(current_center, prev_center);
+                if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance && !matched_previous[prev_id]) {
                     min_distance = dist;
-                    matched_id = j;
+                    matched_id = prev_id;
                 }
             }
+            // マッチしたクラスタIDをマッピング、なければ新規付与
             if (matched_id != -1) {
-                cluster_id_mapping_[i] = matched_id;  // 同一IDを付与
-                matched_previous[matched_id] = true; // 前回のクラスタ中心と一致したかどうかのフラグ
+                cluster_id_mapping_[current_id] = matched_id;
+                matched_previous[matched_id] = true;
             } else {
-                cluster_id_mapping_[i] = next_cluster_id_++;  // 新規クラスタに新しいIDを付与
-                std::cout << "新規クラスタ: " << i << " 新しいクラスタ番号: " << cluster_id_mapping_[i] << std::endl;
+                cluster_id_mapping_[current_id] = next_cluster_id_++;
             }
+            // 最新のクラスタ中心を保存
+            previous_cluster_centers_ = current_centers;
         }
-        for( int i=0; i<cluster_id_mapping_.size(); i++){
-            std::cout << "i:  " << i << " クラスタ番号: " << cluster_id_mapping_[i] << std::endl;
+
+        // 最終マッピング結果を出力
+        for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
+            std::cout << "現在のクラスタ: " << current_id  << " | マッピング後のクラスタ番号: " << previous_id << std::endl;
         }
-        previous_cluster_centers_ = current_centers;
+        std::cout << "----------------------------------------" << std::endl;
     }
 
     void publishClusterMarkers(
         const std::vector<geometry_msgs::msg::Point> &points, 
-        const std::vector<int> &clusters, 
-        const std::set<int> &valid_cluster_ids) {
+        const std::vector<int> &clusters) {
         visualization_msgs::msg::Marker marker;
         marker.header.frame_id = "laser";
         marker.header.stamp = this->get_clock()->now();
@@ -203,22 +219,22 @@ private:
         marker.scale.y = 0.01;
         marker.color.a = 1.0;
 
+        // mapping後のクラスタ番号を使用してカラーを付与
         for (size_t i = 0; i < points.size(); i++) {
             if (points[i].x != 0.0 || points[i].y != 0.0) {
-                if (valid_cluster_ids.find(clusters[i]) != valid_cluster_ids.end()) {
+                // マッピング後のクラスタ番号を取得
+                if(cluster_id_mapping_.count(clusters[i]) > 0){
+                    int mapped_cluster_id = cluster_id_mapping_[clusters[i]];
                     marker.points.push_back(points[i]);
-                    int cluster_id = clusters[i];
-                    marker.colors.push_back(color_palette_[cluster_id % color_palette_.size()]);
-                    std::cout << "点群 " << i << " はmapping後のクラスタ番号 " << cluster_id << " color番号: " << cluster_id%color_palette_.size() << std::endl;
+                    marker.colors.push_back(color_palette_[mapped_cluster_id % color_palette_.size()]);
                 }
             }
         }
+
         cluster_marker_publisher_->publish(marker);
     }
 
-    void publishMatchedClusterCenters(
-        const std::vector<geometry_msgs::msg::Point> &current_centers, 
-        const std::set<int> &valid_cluster_ids) {
+    void publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers) {
         visualization_msgs::msg::Marker center_marker;
         center_marker.header.frame_id = "laser";
         center_marker.header.stamp = this->get_clock()->now();
@@ -231,15 +247,12 @@ private:
         center_marker.scale.z = 0.05;
         center_marker.color.a = 1.0;
 
-        // 前回と一致したクラスタのみをパブリッシュ
-        for (size_t i = 0; i < current_centers.size(); i++) {
-            if (cluster_id_mapping_.find(i) != cluster_id_mapping_.end()) {  // 一致したクラスタIDが存在
-                int cluster_id = cluster_id_mapping_[i];
-                center_marker.points.push_back(current_centers[i]);
-                center_marker.colors.push_back(color_palette_[cluster_id % color_palette_.size()]);
-                // std::cout << "中心" << i << " mapping後のクラスタ番号: " << cluster_id << " color番号: " << cluster_id%color_palette_.size()<< std::endl;
-            }
+        for (auto &[current_id, current_center] : current_centers) {
+            auto cluster_id = cluster_id_mapping_[current_id];
+            center_marker.points.push_back(current_center);
+            center_marker.colors.push_back(color_palette_[cluster_id % color_palette_.size()]);
         }
+
         center_marker_publisher_->publish(center_marker);
     }
 
