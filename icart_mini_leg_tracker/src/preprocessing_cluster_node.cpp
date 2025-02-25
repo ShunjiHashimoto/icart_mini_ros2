@@ -153,7 +153,7 @@ private:
             int cluster_id = pair.first;                         // クラスタID
             const geometry_msgs::msg::Point &center = pair.second; // 中心座標
 
-            std::cout << "クラスタID: " << cluster_id 
+            std::cout << "現在のクラスタID: " << cluster_id 
                     << " | 中心座標: (" << center.x << ", " << center.y << ", " << center.z << ")" 
                     << std::endl;
         }
@@ -168,13 +168,18 @@ private:
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
         cluster_id_mapping_.clear();
         std::map<int, bool> matched_previous;
+        // 現在のクラスタを順番に処理
+        if (previous_cluster_centers_.empty()) {
+            previous_cluster_centers_ = current_centers;
+            return;
+        }
         
         // 前回のクラスタをまだマッチしていない状態に初期化
-        for (const auto &prev_cluster : previous_cluster_centers_) {
-            matched_previous[prev_cluster.first] = false;
+        for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
+            matched_previous[prev_id] = false;
+            std::cout << "前回のクラスタID: " << prev_id << std::endl;
         }
 
-        // 現在のクラスタを順番に処理
         for (auto &[current_id, current_center] : current_centers) {
             double min_distance = std::numeric_limits<double>::max();
             int matched_id = -1;
@@ -182,8 +187,9 @@ private:
             // 前回のクラスタと比較して最も近いクラスタを探す
             for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
                 double dist = calculateDistance(current_center, prev_center);
-                if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance && !matched_previous[prev_id]) {
+                if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance && dist < min_distance) {
                     min_distance = dist;
+                    std::cout << "マッチ距離: " << dist << " prev_id: " << prev_id << " current_id: " << current_id << std::endl;
                     matched_id = prev_id;
                 }
             }
@@ -191,8 +197,10 @@ private:
             if (matched_id != -1) {
                 cluster_id_mapping_[current_id] = matched_id;
                 matched_previous[matched_id] = true;
+                std::cout << "マッチしたクラスタID: " << matched_id << std::endl;
             } else {
                 cluster_id_mapping_[current_id] = next_cluster_id_++;
+                std::cout << "新規クラスタID: " << cluster_id_mapping_[current_id] << std::endl;
             }
             // 最新のクラスタ中心を保存
             previous_cluster_centers_ = current_centers;
@@ -200,7 +208,7 @@ private:
 
         // 最終マッピング結果を出力
         for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
-            std::cout << "現在のクラスタ: " << current_id  << " | マッピング後のクラスタ番号: " << previous_id << std::endl;
+            std::cout << "前回のクラスタ番号: " << previous_id << " | 現在のクラスタ: " << current_id  <<  std::endl;
         }
         std::cout << "----------------------------------------" << std::endl;
     }
