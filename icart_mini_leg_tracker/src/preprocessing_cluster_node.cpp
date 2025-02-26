@@ -40,6 +40,9 @@ private:
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_ = 1;
     bool is_first_frame_ = true;  // 最初のフレームかどうかを判定
+    std::map<int, geometry_msgs::msg::Vector3> cluster_velocities_;  // <クラスタID, 速度ベクトル>
+    rclcpp::Time previous_time_;  // 前回スキャンのタイムスタンプ
+
 
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
         auto points = generateXYPoints(msg);
@@ -164,6 +167,37 @@ private:
         return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
     }
 
+    void calculateClusterVelocities(
+        const std::map<int, geometry_msgs::msg::Point> &current_centers, 
+        const rclcpp::Time &current_time) 
+    {
+        if (previous_cluster_centers_.empty() || previous_time_.nanoseconds() == 0) {
+            previous_time_ = current_time;
+            return;  // 最初のフレームは速度計算をスキップ
+        }
+
+        double delta_time = (current_time - previous_time_).seconds();  // 経過時間[s]
+        if (delta_time <= 0) return;  // 経過時間が0以下の場合は計算しない
+
+        cluster_velocities_.clear();
+        for (const auto &[id, current_center] : current_centers) {
+            if (previous_cluster_centers_.count(id) > 0) {
+                const auto &prev_center = previous_cluster_centers_[id];
+                geometry_msgs::msg::Vector3 velocity;
+                velocity.x = (current_center.x - prev_center.x) / delta_time;
+                velocity.y = (current_center.y - prev_center.y) / delta_time;
+                velocity.z = 0.0;  // 2Dなのでzは0
+                cluster_velocities_[id] = velocity;
+
+                std::cout << "クラスタID: " << id 
+                        << " | 速度ベクトル: (" << velocity.x << ", " << velocity.y << ")" << std::endl;
+            }
+        }
+
+        previous_time_ = current_time;  // 次回のために時間を更新
+    }
+
+
     // 前回のクラスタをもとにトラッキング
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
         cluster_id_mapping_.clear();
@@ -185,7 +219,14 @@ private:
 
             // 前回のクラスタと比較して最も近いクラスタを探す
             for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
-                double dist = calculateDistance(current_center, prev_center);
+                geometry_msgs::msg::Point predicted_center = prev_center;
+                if (cluster_velocities_.count(prev_id) > 0) {
+                    const auto &velocity = cluster_velocities_[prev_id];
+                    double delta_time = (this->get_clock()->now() - previous_time_).seconds();
+                    predicted_center.x += velocity.x * delta_time;
+                    predicted_center.y += velocity.y * delta_time;
+                }
+                double dist = calculateDistance(current_center, predicted_center);
                 if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance && dist < min_distance) {
                     min_distance = dist;
                     matched_id = prev_id;
@@ -206,6 +247,8 @@ private:
             updated_centers[previous_id] = current_centers[current_id];
             std::cout << "前回のクラスタ番号: " << previous_id << " | 現在のクラスタ: " << current_id << std::endl;
         }
+
+        calculateClusterVelocities(updated_centers, this->get_clock()->now());
 
         // 最新のクラスタ中心を保存]
         previous_cluster_centers_ = updated_centers;
