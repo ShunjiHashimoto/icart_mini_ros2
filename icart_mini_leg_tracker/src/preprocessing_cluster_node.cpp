@@ -12,7 +12,7 @@
 #define MAX_SAMPLING_INTERVAL 0.001      // ダウンサンプリング間隔
 #define MIN_CLUSTER_SIZE 10               // 最小クラスタサイズの閾値 
 #define MAX_CLUSTER_SIZE 100               // 最小クラスタサイズの閾値 
-#define CLUSTER_MATCHED_THRESH 0.5  // クラスタマッチ距離閾値
+#define CLUSTER_MATCHED_THRESH 0.3  // クラスタマッチ距離閾値
 
 class PreprocessingClusterNode : public rclcpp::Node {
 public:
@@ -29,7 +29,7 @@ public:
         center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
             "/leg_tracker/cluster_centers", 10
         );
-        color_palette_ = generateColors(100);  // 最大100クラスタ用のカラーを事前生成
+        color_palette_ = generateColors(1000);  // 最大100クラスタ用のカラーを事前生成
 
         RCLCPP_INFO(this->get_logger(), "Preprocessing, Filter & Clustering Node started.");
     }
@@ -177,7 +177,6 @@ private:
         // 前回のクラスタをまだマッチしていない状態に初期化
         for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
             matched_previous[prev_id] = false;
-            std::cout << "前回のクラスタID: " << prev_id << std::endl;
         }
 
         for (auto &[current_id, current_center] : current_centers) {
@@ -189,7 +188,6 @@ private:
                 double dist = calculateDistance(current_center, prev_center);
                 if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance && dist < min_distance) {
                     min_distance = dist;
-                    std::cout << "マッチ距離: " << dist << " prev_id: " << prev_id << " current_id: " << current_id << std::endl;
                     matched_id = prev_id;
                 }
             }
@@ -197,19 +195,21 @@ private:
             if (matched_id != -1) {
                 cluster_id_mapping_[current_id] = matched_id;
                 matched_previous[matched_id] = true;
-                std::cout << "マッチしたクラスタID: " << matched_id << std::endl;
             } else {
                 cluster_id_mapping_[current_id] = next_cluster_id_++;
-                std::cout << "新規クラスタID: " << cluster_id_mapping_[current_id] << std::endl;
             }
-            // 最新のクラスタ中心を保存
-            previous_cluster_centers_ = current_centers;
         }
 
         // 最終マッピング結果を出力
+        std::map<int, geometry_msgs::msg::Point> updated_centers;
         for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
-            std::cout << "前回のクラスタ番号: " << previous_id << " | 現在のクラスタ: " << current_id  <<  std::endl;
+            updated_centers[previous_id] = current_centers[current_id];
+            std::cout << "前回のクラスタ番号: " << previous_id << " | 現在のクラスタ: " << current_id << std::endl;
         }
+
+        // 最新のクラスタ中心を保存]
+        previous_cluster_centers_ = updated_centers;
+        current_centers = updated_centers; 
         std::cout << "----------------------------------------" << std::endl;
     }
 
@@ -279,9 +279,8 @@ private:
         center_marker.color.a = 1.0;
 
         for (auto &[current_id, current_center] : current_centers) {
-            auto cluster_id = cluster_id_mapping_[current_id];
             center_marker.points.push_back(current_center);
-            center_marker.colors.push_back(color_palette_[cluster_id % color_palette_.size()]);
+            center_marker.colors.push_back(color_palette_[current_id % color_palette_.size()]);
         }
 
         center_marker_publisher_->publish(center_marker);
