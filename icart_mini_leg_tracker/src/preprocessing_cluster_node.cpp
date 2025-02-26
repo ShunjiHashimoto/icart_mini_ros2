@@ -39,7 +39,7 @@ private:
     std::map<int, geometry_msgs::msg::Point> previous_cluster_centers_;
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_ = 1;
-    bool is_first_frame_ = true;  // 最初のフレームかどうかを判定
+    bool is_ready_for_tracking = false;  // 最初のフレームかどうかを判定
     std::map<int, geometry_msgs::msg::Vector3> cluster_velocities_;  // <クラスタID, 速度ベクトル>
     rclcpp::Time previous_time_;  // 前回スキャンのタイムスタンプ
 
@@ -51,11 +51,16 @@ private:
         auto clusters = makeClusters(points);
         std::map<int, geometry_msgs::msg::Point> cluster_centers = calculateClusterCenters(points, clusters);
 
-        trackClusters(cluster_centers); 
-        followTarget(cluster_centers);
+        if (!is_ready_for_tracking) {
+            is_ready_for_tracking = filterClustersByRegion(cluster_centers);
+        }
+        else {
+            trackClusters(cluster_centers); 
+            followTarget(cluster_centers);
 
-        publishClusterMarkers(points, clusters);  
-        publishMatchedClusterCenters(cluster_centers);
+            publishClusterMarkers(points, clusters);  
+            publishMatchedClusterCenters(cluster_centers);
+        }
     }
     
     std::vector<geometry_msgs::msg::Point> generateXYPoints(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
@@ -197,6 +202,25 @@ private:
         previous_time_ = current_time;  // 次回のために時間を更新
     }
 
+    bool filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
+        for (auto it = cluster_centers.begin(); it != cluster_centers.end(); ) {
+            const auto &center = it->second;
+            // 正面0.6m以内かつ左右0.2m以内のクラスタのみ採用
+            if (!(center.x > 0 && center.x < 1.0 && fabs(center.y) < 0.4)) {
+                std::cout << "クラスタID " << it->first << " は有効領域外のため除外" << std::endl;
+                it = cluster_centers.erase(it);  // 条件を満たさないクラスタを削除
+            } else {
+                ++it;
+            }
+        }
+        if(cluster_centers.empty()) {
+            std::cout << "有効なクラスタが見つかりませんでした" << std::endl;
+            return false;
+        }
+        else{
+            return true;
+        }
+    }
 
     // 前回のクラスタをもとにトラッキング
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
