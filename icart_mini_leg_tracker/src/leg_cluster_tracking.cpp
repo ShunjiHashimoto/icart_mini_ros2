@@ -51,6 +51,8 @@ private:
     rclcpp::Time previous_time_;  // 前回スキャンのタイムスタンプ
     std::map<int, std::pair<geometry_msgs::msg::Point, rclcpp::Time>> lost_clusters_;
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
+    int previous_target_id_ = -1;  // 直前の追従対象ID
+    bool is_target_initialized_ = false;  // 最初のフレームかどうか 
 
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
         auto points = generateXYPoints(msg);
@@ -65,6 +67,7 @@ private:
         else {
             trackClusters(cluster_centers); 
             followTarget(cluster_centers);
+            std::cout << "----------------------------------------" << std::endl;
 
             publishClusterMarkers(points, clusters);  
             publishMatchedClusterCenters(cluster_centers);
@@ -356,7 +359,6 @@ private:
         // 最新のクラスタ中心を保存
         previous_cluster_centers_ = updated_centers;
         current_centers = updated_centers; 
-        std::cout << "----------------------------------------" << std::endl;
     }
 
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
@@ -364,15 +366,68 @@ private:
 
         // 最も近いクラスタを追従対象とする
         double min_distance = std::numeric_limits<double>::max();
+        double min_movement = std::numeric_limits<double>::max();
         geometry_msgs::msg::Point target_pos;
-        int target_id;
-        for (auto &[current_id, current_center] : cluster_centers) {
-            double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);
-            if (dist < min_distance) {
-                min_distance = dist;
-                target_pos = current_center;
-                target_id = current_id;
+        int target_id = -1;
+        bool previous_target_found = false;
+
+        // 最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
+        if (!is_target_initialized_) {
+            for (const auto &[current_id, current_center] : cluster_centers) {
+                double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);
+                if (current_center.x > 0 && dist < min_distance) {  // 前方 (x > 0) のクラスタを選ぶ
+                    min_distance = dist;
+                    target_id = current_id;
+                    target_pos = current_center;
+                }
             }
+            if (target_id != -1) {
+                is_target_initialized_ = true;
+                previous_target_id_ = target_id;
+                RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
+                return;
+            }
+        }
+
+        // 前回の追従対象がまだ存在しているか確認
+        if (previous_target_id_ != -1 && cluster_centers.count(previous_target_id_)) {
+            target_pos = cluster_centers.at(previous_target_id_);
+            target_id = previous_target_id_;
+            min_distance = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
+            previous_target_found = true;
+        }
+
+        // 前回の追従対象が見つからない or 距離が大きく変化していたら、新しい対象を探す
+        for (const auto &[current_id, current_center] : cluster_centers) {
+            double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);
+            
+            // **急激な移動を防ぐため、前回の対象と大きく離れていないかチェック**
+            double movement = std::numeric_limits<double>::max();
+            if (previous_target_found) {
+                geometry_msgs::msg::Point prev_pos = cluster_centers.at(previous_target_id_);
+                movement = sqrt(pow(current_center.x - prev_pos.x, 2) + pow(current_center.y - prev_pos.y, 2));
+            }
+
+            // **優先度: (1) できるだけ前回の対象に近い → (2) ロボットから近い**
+            if (!previous_target_found || movement < 0.5) {  // 0.5m 以上離れていたら選ばない
+                if (movement < min_movement) {
+                    min_movement = movement;
+                    target_id = current_id;
+                    target_pos = current_center;
+                }
+            } else if (target_id == -1 || dist < min_distance) {
+                min_distance = dist;
+                target_id = current_id;
+                target_pos = current_center;
+            }
+        }
+
+        // 追従対象を更新
+        if (target_id != -1) {
+            previous_target_id_ = target_id;
+        } else {
+            RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
+            return;
         }
 
         // 追従対象に向かうための移動指令（例：ロボットの進行方向と距離）
