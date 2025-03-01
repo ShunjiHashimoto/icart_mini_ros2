@@ -20,7 +20,8 @@ RUN apt-get update && apt-get install -y \
   iputils-ping \
   net-tools \
   libmodbus-dev \
-  tree
+  tree \
+  libpcl-dev
 
 # Install python packages
 RUN apt-get install -y \
@@ -41,6 +42,8 @@ RUN apt-get update && apt-get install -y \
   ros-humble-joy \ 
   ros-humble-teleop-twist-joy \
   ros-humble-joint-state-publisher-gui \
+  ros-humble-pcl-ros \
+  ros-humble-pcl-conversions \
   ros-humble-rclcpp && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 

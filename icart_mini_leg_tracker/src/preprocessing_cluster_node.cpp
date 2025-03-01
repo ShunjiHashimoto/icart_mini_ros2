@@ -8,11 +8,17 @@
 #include <random>
 #include <fstream>
 
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/search/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
+
 #define MAX_NOISE_DISTANCE_THRESH 0.005  // ノイズ除去距離閾値
 #define MAX_SAMPLING_INTERVAL 0.001      // ダウンサンプリング間隔
 #define MIN_CLUSTER_SIZE 10               // 最小クラスタサイズの閾値 
 #define MAX_CLUSTER_SIZE 100               // 最小クラスタサイズの閾値 
 #define CLUSTER_MATCHED_THRESH 0.3  // クラスタマッチ距離閾値
+#define CLUSTER_TOLERANCE 0.05
 
 class PreprocessingClusterNode : public rclcpp::Node {
 public:
@@ -48,7 +54,7 @@ private:
         auto points = generateXYPoints(msg);
         removeNoise(points);
         downSampling(points);
-        auto clusters = makeClusters(points);
+        auto clusters = makeClustersPCL(points);
         std::map<int, geometry_msgs::msg::Point> cluster_centers = calculateClusterCenters(points, clusters);
 
         if (!is_ready_for_tracking) {
@@ -102,26 +108,37 @@ private:
         }
     }
 
-    std::vector<int> makeClusters(const std::vector<geometry_msgs::msg::Point> &points, double distance_threshold = 0.05625) {
+    std::vector<int> makeClustersPCL(const std::vector<geometry_msgs::msg::Point> &points) {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+        // PCLのPointCloudに変換
+        for (const auto &point : points) {
+            pcl::PointXYZ pcl_point;
+            pcl_point.x = point.x;
+            pcl_point.y = point.y;
+            pcl_point.z = 0.0;
+            cloud->points.push_back(pcl_point);
+        }
+        // KD-Treeを作成
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+        tree->setInputCloud(cloud);
+
+        // クラスタリング実行
+        std::vector<pcl::PointIndices> cluster_indices;
+        pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+        ec.setClusterTolerance(CLUSTER_TOLERANCE);  // 5cm以内の点を同じクラスタにする
+        ec.setMinClusterSize(MIN_CLUSTER_SIZE);      // 最小クラスタサイズ
+        ec.setMaxClusterSize(MAX_CLUSTER_SIZE);     // 最大クラスタサイズ
+        ec.setSearchMethod(tree);
+        ec.setInputCloud(cloud);
+        ec.extract(cluster_indices);
         std::vector<int> clusters(points.size(), 0);
         int cluster_id = 1;
-        for (size_t i = 0; i < points.size(); i++) {
-            if (points[i].x == 0.0 && points[i].y == 0.0) continue;
-            if (clusters[i] == 0) {
-                clusters[i] = cluster_id;
-                size_t prev = i;
-
-                for (size_t j = i + 1; j < points.size(); j++) {
-                    if (clusters[j] == 0) {
-                        double dist = sqrt(pow(points[prev].x - points[j].x, 2) + pow(points[prev].y - points[j].y, 2));
-                        if (dist < distance_threshold) {
-                            clusters[j] = cluster_id;
-                            prev = j;  // 直前の点を更新
-                        }
-                    }
-                }
-                cluster_id++;
+        for (const auto &indices : cluster_indices) {
+            for (int idx : indices.indices) {
+                clusters[idx] = cluster_id;
             }
+            cluster_id++;
         }
         return clusters;
     }
@@ -160,7 +177,6 @@ private:
         for (const auto &pair : cluster_centers) {
             int cluster_id = pair.first;                         // クラスタID
             const geometry_msgs::msg::Point &center = pair.second; // 中心座標
-
             std::cout << "現在のクラスタID: " << cluster_id 
                     << " | 中心座標: (" << center.x << ", " << center.y << ", " << center.z << ")" 
                     << std::endl;
