@@ -20,12 +20,12 @@
 #define CLUSTER_MATCHED_THRESH 0.3  // クラスタマッチ距離閾値
 #define CLUSTER_TOLERANCE 0.05
 
-class PreprocessingClusterNode : public rclcpp::Node {
+class LegClusterTracking : public rclcpp::Node {
 public:
-    PreprocessingClusterNode() : Node("preprocessing_cluster_node") {
+    LegClusterTracking() : Node("leg_cluster_tracking_node") {
         lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10,
-            std::bind(&PreprocessingClusterNode::scanCallback, this, std::placeholders::_1)
+            std::bind(&LegClusterTracking::scanCallback, this, std::placeholders::_1)
         );
 
         cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
@@ -37,7 +37,7 @@ public:
         );
         color_palette_ = generateColors(1000);  // 最大100クラスタ用のカラーを事前生成
 
-        RCLCPP_INFO(this->get_logger(), "Preprocessing, Filter & Clustering Node started.");
+        RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
     }
 
 private:
@@ -389,7 +389,7 @@ private:
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<PreprocessingClusterNode>());
+    rclcpp::spin(std::make_shared<LegClusterTracking>());
     rclcpp::shutdown();
     return 0;
 }

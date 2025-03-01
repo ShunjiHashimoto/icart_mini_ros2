@@ -16,9 +16,9 @@ find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 
-add_executable(preprocessing_cluster_node src/preprocessing_cluster_node.cpp)
-ament_target_dependencies(preprocessing_cluster_node rclcpp sensor_msgs visualization_msgs geometry_msgs pcl_ros pcl_conversions)
-install(TARGETS preprocessing_cluster_node DESTINATION lib/${PROJECT_NAME})
+add_executable(leg_cluster_tracking_node src/leg_cluster_tracking.cpp)
+ament_target_dependencies(leg_cluster_tracking_node rclcpp sensor_msgs visualization_msgs geometry_msgs pcl_ros pcl_conversions)
+install(TARGETS leg_cluster_tracking_node DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
