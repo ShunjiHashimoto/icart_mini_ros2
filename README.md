@@ -42,10 +42,68 @@ $ ros2 launch icart_mini_description icart_mini_display.launch.py
 [i-Cart](https://github.com/BND-tc/i-Cart)は、i-Cartシリーズのモデルデータおよびパラメータファイル
 
 # Technical Overview
-### Preprocessing
-- ノイズ除去
-- ダウンサンプリング　など
 
-### Clustering
-点群データをクラスタリングし、特定のクラスタのみを追従する
+### Preprocessing (前処理)
+LiDARデータを用いたクラスタ追跡を行う前に、データのノイズ除去や前処理を実施。
+
+1. **ノイズ除去 (Noise Removal)**  
+   - 点群内の極端に近い点をノイズとして除去 (閾値: `MAX_NOISE_DISTANCE_THRESH`)
+   - 一定距離以下の点群をフィルタリングし、データの品質を向上
+
+2. **ダウンサンプリング (Downsampling)**  
+   - 隣接する点を間引き、データサイズを削減 (`MAX_SAMPLING_INTERVAL` を閾値として適用)
+   - 計算コストを抑え、リアルタイム処理の効率を向上
+
+---
+
+### Clustering (クラスタリング)
+前処理を施した点群データをもとに、**Euclidean Cluster Extraction** を用いてクラスタリングを行う。
+
+1. **KD-Tree を用いた近傍探索**
+   - PCLの `KdTree` を使用し、点群の空間構造を解析
+   - クラスタ形成に必要な **クラスタ間の許容距離 (`CLUSTER_TOLERANCE`)** を設定
+
+2. **クラスタサイズの制限**
+   - `MIN_CLUSTER_SIZE` (最小点数) 以上、`MAX_CLUSTER_SIZE` (最大点数) 以下のクラスタのみ有効
+   - 不適切なクラスタ (小さすぎる or 大きすぎる) を排除
+
+3. **クラスタの中心座標を算出**
+   - 各クラスタの点群を平均し、**クラスタの重心** を求める
+   - 重心をもとに、次の追跡・追従処理を実施
+
+---
+
+### Tracking (クラスタ追跡)
+前フレームのクラスタ情報と現在のクラスタ情報を比較し、**クラスタIDを一貫性を持って追跡** する。
+
+1. **速度ベクトルを考慮したクラスタマッチング**
+   - 各クラスタの移動ベクトル (`cluster_velocities_`) を計算し、過去のクラスタの予測位置を算出
+   - `CLUSTER_MATCHED_THRESH` (クラスタマッチ閾値) を用いて、前フレームとの一致を判定
+
+2. **失われたクラスタの復活**
+   - 一時的に検出されなくなったクラスタを、**過去の速度ベクトルから予測** し、一致すれば復活させる (`LOST_CLUSTER_TIMEOUT` 以内)
+
+---
+
+### Following (クラスタ追従)
+クラスタの中から **「追従すべき対象」** を選定し、ロボットの移動制御を行う。
+
+1. **追従対象の決定**
+   - **最も近いクラスタ** または **前回の対象に近いクラスタ** を優先
+   - 急激な移動を防ぐため、**前回のクラスタと大きく離れた対象は無視**
+
+2. **速度・旋回制御**
+   - 追従対象との距離に応じて **前進速度 (`cmd_vel.linear.x`)** を調整
+   - 追従対象の方向に向くように **旋回 (`cmd_vel.angular.z`)** を計算
+
+3. **ジョイスティック操作による停止**
+   - `Joy` メッセージの入力に応じて、ロボットの動作を即時停止
+
+---
+
+### Visualization (可視化)
+処理結果を Rviz で確認するために、以下のデータを `visualization_msgs::msg::Marker` を使ってパブリッシュ:
+
+1. **クラスタごとの点群 (`/leg_tracker/cluster_markers`)**
+2. **クラスタの中心 (`/leg_tracker/cluster_centers`)**
 <img src=.docs/imgs/clustering.png width=50%>
