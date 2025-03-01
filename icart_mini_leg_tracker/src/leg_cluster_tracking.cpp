@@ -19,6 +19,7 @@
 #define MAX_CLUSTER_SIZE 100               // 最小クラスタサイズの閾値 
 #define CLUSTER_MATCHED_THRESH 0.3  // クラスタマッチ距離閾値
 #define CLUSTER_TOLERANCE 0.05
+#define LOST_CLUSTER_TIMEOUT 2.0 // 2秒以内なら復活
 
 class LegClusterTracking : public rclcpp::Node {
 public:
@@ -48,7 +49,8 @@ private:
     bool is_ready_for_tracking = false;  // 最初のフレームかどうかを判定
     std::map<int, geometry_msgs::msg::Vector3> cluster_velocities_;  // <クラスタID, 速度ベクトル>
     rclcpp::Time previous_time_;  // 前回スキャンのタイムスタンプ
-
+    std::map<int, std::pair<geometry_msgs::msg::Point, rclcpp::Time>> lost_clusters_;
+    std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
 
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
         auto points = generateXYPoints(msg);
@@ -208,13 +210,18 @@ private:
                 velocity.x = (current_center.x - prev_center.x) / delta_time;
                 velocity.y = (current_center.y - prev_center.y) / delta_time;
                 velocity.z = 0.0;  // 2Dなのでzは0
+                // 速度が大きすぎる場合は制限をかける（異常値対策）
+                double speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+                if (speed > 1.0) {  // 最大1.0 m/s に制限
+                    velocity.x *= (1.0 / speed);
+                    velocity.y *= (1.0 / speed);
+                }
                 cluster_velocities_[id] = velocity;
 
                 std::cout << "クラスタID: " << id 
                         << " | 速度ベクトル: (" << velocity.x << ", " << velocity.y << ")" << std::endl;
             }
         }
-
         previous_time_ = current_time;  // 次回のために時間を更新
     }
 
@@ -242,7 +249,8 @@ private:
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
         cluster_id_mapping_.clear();
         std::map<int, bool> matched_previous;
-        // 現在のクラスタを順番に処理
+
+        // 以前のクラスタを初期化
         if (previous_cluster_centers_.empty()) {
             previous_cluster_centers_ = current_centers;
             return;
@@ -253,11 +261,57 @@ private:
             matched_previous[prev_id] = false;
         }
 
+        // 【1】まずは失われたクラスタとマッチングを試みる
         for (auto &[current_id, current_center] : current_centers) {
             double min_distance = std::numeric_limits<double>::max();
             int matched_id = -1;
 
-            // 前回のクラスタと比較して最も近いクラスタを探す
+            for (auto it = lost_clusters_.begin(); it != lost_clusters_.end();) {
+                int lost_id = it->first;
+                geometry_msgs::msg::Point lost_center = it->second.first;
+                rclcpp::Time lost_time = it->second.second;
+
+                // 一定時間経過したクラスタは破棄
+                double elapsed_time = (this->get_clock()->now() - lost_time).seconds();
+                if (elapsed_time > LOST_CLUSTER_TIMEOUT) {
+                    it = lost_clusters_.erase(it);
+                    lost_cluster_velocities_.erase(lost_id);
+                    continue;
+                }
+
+                // 失われたクラスタの予測位置を計算
+                geometry_msgs::msg::Point predicted_center = lost_center;
+                if (lost_cluster_velocities_.count(lost_id) > 0) {
+                    const auto &velocity = lost_cluster_velocities_[lost_id];
+                    predicted_center.x += velocity.x * elapsed_time;
+                    predicted_center.y += velocity.y * elapsed_time;
+                }
+
+                // 距離を比較してマッチング候補を決定
+                double dist = calculateDistance(current_center, predicted_center);
+                if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance) {
+                    min_distance = dist;
+                    matched_id = lost_id;
+                }
+                ++it;
+            }
+
+            // マッチング成功ならIDを復活
+            if (matched_id != -1) {
+                cluster_id_mapping_[current_id] = matched_id;
+                lost_clusters_.erase(matched_id);
+                lost_cluster_velocities_.erase(matched_id);
+                std::cout << "失われたクラスタID " << matched_id << " が復活" << std::endl;
+            }
+        }
+
+        // 【2】前回のクラスタと比較して最も近いクラスタを探す
+        for (auto &[current_id, current_center] : current_centers) {
+            if (cluster_id_mapping_.count(current_id) > 0) continue;  // すでにマッチ済み
+
+            double min_distance = std::numeric_limits<double>::max();
+            int matched_id = -1;
+
             for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
                 geometry_msgs::msg::Point predicted_center = prev_center;
                 if (cluster_velocities_.count(prev_id) > 0) {
@@ -281,6 +335,16 @@ private:
             }
         }
 
+        // 【3】マッチしなかったクラスタを"失われたクラスタ"として保存
+        for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
+            if (!matched_previous[prev_id]) {
+                lost_clusters_[prev_id] = {prev_center, this->get_clock()->now()};
+                if (cluster_velocities_.count(prev_id) > 0) {
+                    lost_cluster_velocities_[prev_id] = cluster_velocities_[prev_id];
+                }
+            }
+        }
+
         // 最終マッピング結果を出力
         std::map<int, geometry_msgs::msg::Point> updated_centers;
         for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
@@ -289,8 +353,7 @@ private:
         }
 
         calculateClusterVelocities(updated_centers, this->get_clock()->now());
-
-        // 最新のクラスタ中心を保存]
+        // 最新のクラスタ中心を保存
         previous_cluster_centers_ = updated_centers;
         current_centers = updated_centers; 
         std::cout << "----------------------------------------" << std::endl;
