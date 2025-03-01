@@ -2,6 +2,8 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/point.hpp"
+#include <geometry_msgs/msg/twist.hpp>
+#include <sensor_msgs/msg/joy.hpp>
 #include <vector>
 #include <cmath>
 #include <set>
@@ -28,6 +30,9 @@ public:
             "/scan", 10,
             std::bind(&LegClusterTracking::scanCallback, this, std::placeholders::_1)
         );
+        joy_subscriber_ = this->create_subscription<sensor_msgs::msg::Joy>(
+            "/joy", 10, std::bind(&LegClusterTracking::joyCallback, this, std::placeholders::_1)
+        );
 
         cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
             "/leg_tracker/cluster_markers", 10
@@ -36,6 +41,9 @@ public:
         center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
             "/leg_tracker/cluster_centers", 10
         );
+
+        cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+
         color_palette_ = generateColors(1000);  // 最大100クラスタ用のカラーを事前生成
 
         RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
@@ -53,6 +61,16 @@ private:
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     int previous_target_id_ = -1;  // 直前の追従対象ID
     bool is_target_initialized_ = false;  // 最初のフレームかどうか 
+    bool stop_by_joystick_ = false;  // Joystick の入力で停止したかどうか
+
+    void joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
+        int emergency_button = 0; // 例えばボタン0を停止用にする
+        if (msg->buttons[emergency_button] == 1) {
+            RCLCPP_WARN(this->get_logger(), "ジョイスティック入力でロボットを停止します！");
+            stop_by_joystick_ = true;
+            publishCmdVel(0.0, 0.0); // 完全停止
+        }
+    }
 
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
         auto points = generateXYPoints(msg);
@@ -362,7 +380,10 @@ private:
     }
 
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
-        if (cluster_centers.empty()) return;
+        if (cluster_centers.empty()) {
+            publishCmdVel(0.0, 0.0);  // 停止指令を送信
+            return;
+        }
 
         // 最も近いクラスタを追従対象とする
         double min_distance = std::numeric_limits<double>::max();
@@ -434,7 +455,40 @@ private:
         double angle_to_target = atan2(target_pos.y, target_pos.x);
         double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
+        publishCmdVel(distance_to_target, angle_to_target);
+
         RCLCPP_INFO(this->get_logger(), "追従対象ID %d: 距離: %.2f m, 角度: %.2f 度", target_id, distance_to_target, angle_to_target * 180 / M_PI);
+    }
+
+    void publishCmdVel(double target_distance, double target_angle) {
+        auto cmd_msg = geometry_msgs::msg::Twist();
+
+        // ジョイスティックで停止が指示されたら何もしない
+        if (stop_by_joystick_) {
+            RCLCPP_WARN(this->get_logger(), "ジョイスティックの入力により移動を停止中...");
+            cmd_vel_publisher_->publish(cmd_msg);
+            return;
+        }
+
+        // 30cm以内なら停止
+        if (target_distance <= 0.3) {
+            RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");
+            cmd_vel_publisher_->publish(cmd_msg); // 速度0を送信
+            return;
+        }
+
+        // 前方への移動速度を計算
+        double max_speed = 0.2;
+        double min_speed = 0.05;
+        cmd_msg.linear.x = std::min(max_speed, std::max(min_speed, (target_distance - 0.3) * 0.5));
+
+        // 旋回速度を計算
+        double max_turn_speed = M_PI / 2.0;
+        double min_turn_speed = 0.1;
+        cmd_msg.angular.z = std::min(max_turn_speed, std::max(-max_turn_speed, target_angle * 2.0));
+
+        // 速度をパブリッシュ
+        cmd_vel_publisher_->publish(cmd_msg);
     }
 
     void publishClusterMarkers(
@@ -501,8 +555,10 @@ private:
     }
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
+    rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr cluster_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr center_marker_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
 };
 
 int main(int argc, char **argv) {
