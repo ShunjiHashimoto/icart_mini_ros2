@@ -31,7 +31,7 @@ public:
             std::bind(&LegClusterTracking::scanCallback, this, std::placeholders::_1)
         );
         joy_subscriber_ = this->create_subscription<sensor_msgs::msg::Joy>(
-            "/joy", 10, std::bind(&LegClusterTracking::joyCallback, this, std::placeholders::_1)
+            "/joy", rclcpp::QoS(10).best_effort(), std::bind(&LegClusterTracking::joyCallback, this, std::placeholders::_1)
         );
 
         cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
@@ -64,11 +64,14 @@ private:
     bool stop_by_joystick_ = false;  // Joystick の入力で停止したかどうか
 
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-        int emergency_button = 0; // 例えばボタン0を停止用にする
+        int emergency_button = 4; // 例えばボタン0を停止用にする
         if (msg->buttons[emergency_button] == 1) {
             RCLCPP_WARN(this->get_logger(), "ジョイスティック入力でロボットを停止します！");
             stop_by_joystick_ = true;
             publishCmdVel(0.0, 0.0); // 完全停止
+        }
+        else if(msg->buttons[emergency_button] == 0) {
+            stop_by_joystick_ = false;
         }
     }
 
@@ -448,6 +451,7 @@ private:
             previous_target_id_ = target_id;
         } else {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
+            publishCmdVel(0.0, 0.0);  // 停止指令を送信
             return;
         }
 
@@ -478,7 +482,7 @@ private:
         }
 
         // 前方への移動速度を計算
-        double max_speed = 0.2;
+        double max_speed = 0.1;
         double min_speed = 0.05;
         cmd_msg.linear.x = std::min(max_speed, std::max(min_speed, (target_distance - 0.3) * 0.5));
 
