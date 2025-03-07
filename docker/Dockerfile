@@ -76,4 +76,4 @@ RUN mkdir -p /root/icart_ws/src
 WORKDIR /root/icart_ws/src
 
 RUN echo 'source /root/icart_ws/src/icart_mini_ros2/docker/before_bringup.sh' >> ~/.bashrc
-RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select icart_mini_ros2"' >> ~/.bashrc
+RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select icart_mini_leg_tracker"' >> ~/.bashrc
