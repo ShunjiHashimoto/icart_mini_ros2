@@ -13,6 +13,7 @@ LegClusterTracking::LegClusterTracking() : Node("leg_cluster_tracking_node"),
     cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/leg_tracker/cluster_markers", 10);
     center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_centers", 10);
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+    target_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/leg_tracker/target_marker", 10);
 
     color_palette_ = generateColors(1000);  // 最大100クラスタ用のカラーを事前生成
 
@@ -350,12 +351,9 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         return;
     }
 
-    // 最も近いクラスタを追従対象とする
     double min_distance = std::numeric_limits<double>::max();
-    double min_movement = std::numeric_limits<double>::max();
-    geometry_msgs::msg::Point target_pos;
     int target_id = -1;
-    bool previous_target_found = false;
+    geometry_msgs::msg::Point target_pos;
 
     // 最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
     if (!is_target_initialized_) {
@@ -367,15 +365,20 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                 target_pos = current_center;
             }
         }
-        if (target_id != -1) {
-            is_target_initialized_ = true;
-            previous_target_id_ = target_id;
-            RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
+        if (target_id == -1) {
+            RCLCPP_WARN(this->get_logger(), "初期追従対象が見つかりませんでした。");
+            publishCmdVel(0.0, 0.0);
             return;
         }
+
+        is_target_initialized_ = true;
+        previous_target_id_ = target_id;
+        RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
+        return;
     }
 
     // 前回の追従対象がまだ存在しているか確認
+    bool previous_target_found = false;
     if (previous_target_id_ != -1 && cluster_centers.count(previous_target_id_)) {
         target_pos = cluster_centers.at(previous_target_id_);
         target_id = previous_target_id_;
@@ -384,17 +387,18 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     }
 
     // 前回の追従対象が見つからない or 距離が大きく変化していたら、新しい対象を探す
+    double min_movement = std::numeric_limits<double>::max();
     for (const auto &[current_id, current_center] : cluster_centers) {
         double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);
-        
-        // **急激な移動を防ぐため、前回の対象と大きく離れていないかチェック**
+        // 急激な移動を防ぐため、前回の対象と大きく離れていないかチェック
         double movement = std::numeric_limits<double>::max();
+
         if (previous_target_found) {
             geometry_msgs::msg::Point prev_pos = cluster_centers.at(previous_target_id_);
             movement = sqrt(pow(current_center.x - prev_pos.x, 2) + pow(current_center.y - prev_pos.y, 2));
         }
 
-        // **優先度: (1) できるだけ前回の対象に近い → (2) ロボットから近い**
+        // 優先度: (1) できるだけ前回の対象に近い → (2) ロボットから近い
         if (!previous_target_found || movement < 0.5) {  // 0.5m 以上離れていたら選ばない
             if (movement < min_movement) {
                 min_movement = movement;
@@ -408,22 +412,47 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         }
     }
 
-    // 追従対象を更新
-    if (target_id != -1) {
-        previous_target_id_ = target_id;
-    } else {
+    if (target_id == -1) {
         RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
-        publishCmdVel(0.0, 0.0);  // 停止指令を送信
+        publishCmdVel(0.0, 0.0);
         return;
     }
 
-    // 追従対象に向かうための移動指令（例：ロボットの進行方向と距離）
+    // 近くにもう1つのクラスタがあるかチェック
+    int second_id = -1;
+    geometry_msgs::msg::Point second_center;
+    
+    for (const auto &[current_id, current_center] : cluster_centers) {
+        if (current_id == target_id) continue;
+
+        double dist = sqrt(pow(current_center.x - target_pos.x, 2) + pow(current_center.y - target_pos.y, 2));
+        if (dist < FOOT_DISTANCE_THRESHOLD) {
+            second_id = current_id;
+            second_center = current_center;
+            break;
+        }
+    }
+
+    // 追従位置を決定
+    if (second_id != -1) {
+        target_pos.x = (target_pos.x + second_center.x) / 2.0;
+        target_pos.y = (target_pos.y + second_center.y) / 2.0;
+        RCLCPP_INFO(this->get_logger(), "2つのクラスタを選択: ID %d と ID %d", target_id, second_id);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "単独クラスタを追従: ID %d", target_id);
+    }
+
+    // ターゲットを更新
+    previous_target_id_ = target_id;
+
+    publishTargetMarker(target_pos);
+
+    // 目標地点への移動指令
     double angle_to_target = atan2(target_pos.y, target_pos.x);
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
-    // publishCmdVel(distance_to_target, angle_to_target);
-
-    RCLCPP_INFO(this->get_logger(), "追従対象ID %d: 距離: %.2f m, 角度: %.2f 度", target_id, distance_to_target, angle_to_target * 180 / M_PI);
+    RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
+    publishCmdVel(distance_to_target, angle_to_target);
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
@@ -449,7 +478,7 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     cmd_msg.linear.x = std::min(max_speed, std::max(min_speed, (target_distance - 0.3) * 0.5));
 
     // 旋回速度を計算
-    double max_turn_speed = M_PI / 2.0;
+    double max_turn_speed = M_PI / 4.0;
     cmd_msg.angular.z = std::min(max_turn_speed, std::max(-max_turn_speed, target_angle * 2.0));
 
     // 速度をパブリッシュ
@@ -498,17 +527,6 @@ void LegClusterTracking::publishMatchedClusterCenters(const std::map<int, geomet
     center_marker.action = visualization_msgs::msg::Marker::ADD;
     center_marker.scale.x = 0.05;
     center_marker.scale.y = 0.05;
-
-    // クラスタ中心を示すマーカー
-    visualization_msgs::msg::Marker center_marker;
-    center_marker.header.frame_id = "laser";
-    center_marker.header.stamp = this->get_clock()->now();
-    center_marker.ns = "matched_cluster_centers";
-    center_marker.id = 1;
-    center_marker.type = visualization_msgs::msg::Marker::SPHERE_LIST;
-    center_marker.action = visualization_msgs::msg::Marker::ADD;
-    center_marker.scale.x = 0.05;
-    center_marker.scale.y = 0.05;
     center_marker.scale.z = 0.05;
     center_marker.color.a = 1.0;
 
@@ -546,6 +564,27 @@ void LegClusterTracking::publishMatchedClusterCenters(const std::map<int, geomet
 
     // マーカーを一括でパブリッシュ
     center_marker_publisher_->publish(marker_array);
+}
+
+void LegClusterTracking::publishTargetMarker(const geometry_msgs::msg::Point &target_pos) {
+    visualization_msgs::msg::Marker marker;
+    marker.header.frame_id = "laser";
+    marker.header.stamp = this->get_clock()->now();
+    marker.ns = "target_marker";
+    marker.id = 999;  // ユニークなID
+    marker.type = visualization_msgs::msg::Marker::SPHERE;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose.position = target_pos;
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = 0.1;
+    marker.scale.y = 0.1;
+    marker.scale.z = 0.1;
+    marker.color.r = 1.0;
+    marker.color.g = 0.0;
+    marker.color.b = 0.0;
+    marker.color.a = 1.0;  // 透明度
+
+    target_marker_publisher_->publish(marker);
 }
 
 std::vector<std_msgs::msg::ColorRGBA> LegClusterTracking::generateColors(int num_clusters) {

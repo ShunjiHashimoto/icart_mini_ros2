@@ -27,6 +27,7 @@
 #define CLUSTER_MATCHED_THRESH 0.3  
 #define CLUSTER_TOLERANCE 0.05
 #define LOST_CLUSTER_TIMEOUT 2.0 
+#define FOOT_DISTANCE_THRESHOLD 0.3
 
 class LegClusterTracking : public rclcpp::Node {
 public:
@@ -58,6 +59,7 @@ private:
     // 可視化関連
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
     void publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers);
+    void publishTargetMarker(const geometry_msgs::msg::Point &target_pos);
     std::vector<std_msgs::msg::ColorRGBA> generateColors(int num_clusters);
 
     // 移動制御
@@ -82,9 +84,9 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr cluster_marker_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
 };
 
 #endif // LEG_CLUSTER_TRACKING_HPP
-
