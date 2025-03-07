@@ -11,7 +11,7 @@ LegClusterTracking::LegClusterTracking() : Node("leg_cluster_tracking_node"),
     );
 
     cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/leg_tracker/cluster_markers", 10);
-    center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/leg_tracker/cluster_centers", 10);
+    center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_centers", 10);
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
 
     color_palette_ = generateColors(1000);  // 最大100クラスタ用のカラーを事前生成
@@ -42,7 +42,7 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
     } else {
         trackClusters(cluster_centers);
         followTarget(cluster_centers);
-        RCLCPP_DEBUG(this->get_logger(), "----------------------------------------");
+        std::cout << "========================================\n\n";
         publishClusterMarkers(points, clusters);
         publishMatchedClusterCenters(cluster_centers);
     }
@@ -302,6 +302,10 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
         if (matched_id != -1) {
             cluster_id_mapping_[current_id] = matched_id;
             matched_previous[matched_id] = true;
+            cluster_id_history_[matched_id].push_back(current_id);
+            if (cluster_id_history_[matched_id].size() > 5) {  // 過去5フレーム分だけ保持
+                cluster_id_history_[matched_id].erase(cluster_id_history_[matched_id].begin());
+            }
         } else {
             cluster_id_mapping_[current_id] = next_cluster_id_++;
         }
@@ -319,9 +323,19 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
     // 最終マッピング結果を出力
     std::map<int, geometry_msgs::msg::Point> updated_centers;
+    std::cout << "   前回のクラスタID   |   現在のクラスタID\n";
+    std::cout << "----------------------------------------\n";
     for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
         updated_centers[previous_id] = current_centers[current_id];
-        std::cout << "前回のクラスタ番号: " << previous_id << " | 現在のクラスタ: " << current_id << std::endl;
+        std::cout << std::setw(10) << previous_id << "           |   "
+                  << std::setw(10) << current_id << "\n";
+    }
+    for (const auto &[cluster_id, history] : cluster_id_history_) {
+        std::cout << "クラスタ " << cluster_id << " の履歴: ";
+        for (int past_id : history) {
+            std::cout << past_id << " ";
+        }
+        std::cout << "\n";
     }
 
     this->calculateClusterVelocities(updated_centers, this->get_clock()->now());
@@ -407,7 +421,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     double angle_to_target = atan2(target_pos.y, target_pos.x);
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
-    publishCmdVel(distance_to_target, angle_to_target);
+    // publishCmdVel(distance_to_target, angle_to_target);
 
     RCLCPP_INFO(this->get_logger(), "追従対象ID %d: 距離: %.2f m, 角度: %.2f 度", target_id, distance_to_target, angle_to_target * 180 / M_PI);
 }
@@ -436,7 +450,6 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
 
     // 旋回速度を計算
     double max_turn_speed = M_PI / 2.0;
-    double min_turn_speed = 0.1;
     cmd_msg.angular.z = std::min(max_turn_speed, std::max(-max_turn_speed, target_angle * 2.0));
 
     // 速度をパブリッシュ
@@ -473,6 +486,20 @@ void LegClusterTracking::publishClusterMarkers(
 }
 
 void LegClusterTracking::publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers) {
+    visualization_msgs::msg::MarkerArray marker_array;  // マーカー配列を作成
+
+    // クラスタ中心を示すマーカー
+    visualization_msgs::msg::Marker center_marker;
+    center_marker.header.frame_id = "laser";
+    center_marker.header.stamp = this->get_clock()->now();
+    center_marker.ns = "matched_cluster_centers";
+    center_marker.id = 1;
+    center_marker.type = visualization_msgs::msg::Marker::SPHERE_LIST;
+    center_marker.action = visualization_msgs::msg::Marker::ADD;
+    center_marker.scale.x = 0.05;
+    center_marker.scale.y = 0.05;
+
+    // クラスタ中心を示すマーカー
     visualization_msgs::msg::Marker center_marker;
     center_marker.header.frame_id = "laser";
     center_marker.header.stamp = this->get_clock()->now();
@@ -485,12 +512,40 @@ void LegClusterTracking::publishMatchedClusterCenters(const std::map<int, geomet
     center_marker.scale.z = 0.05;
     center_marker.color.a = 1.0;
 
-    for (auto &[current_id, current_center] : current_centers) {
+    // ID 表示用のテキストマーカーのテンプレート
+    visualization_msgs::msg::Marker text_marker;
+    text_marker.header.frame_id = "laser";
+    text_marker.header.stamp = this->get_clock()->now();
+    text_marker.ns = "cluster_id_labels";
+    text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+    text_marker.action = visualization_msgs::msg::Marker::ADD;
+    text_marker.scale.z = 0.1;
+    text_marker.color.r = 1.0;
+    text_marker.color.g = 1.0;
+    text_marker.color.b = 1.0;
+    text_marker.color.a = 1.0;
+
+    int marker_id = 100;
+
+    for (const auto &[current_id, current_center] : current_centers) {
+        // クラスタ中心マーカーを追加
         center_marker.points.push_back(current_center);
         center_marker.colors.push_back(color_palette_[current_id % color_palette_.size()]);
+
+        // クラスタIDのテキストマーカーを作成
+        visualization_msgs::msg::Marker text = text_marker;
+        text.id = marker_id++;  // 一意のIDを設定
+        text.pose.position = current_center;
+        text.pose.position.z += 0.1; // 少し上に配置
+        text.text = std::to_string(current_id); // ID を文字列としてセット
+        marker_array.markers.push_back(text); // マーカー配列に追加
     }
 
-    center_marker_publisher_->publish(center_marker);
+    // クラスタ中心マーカーを配列に追加
+    marker_array.markers.push_back(center_marker);
+
+    // マーカーを一括でパブリッシュ
+    center_marker_publisher_->publish(marker_array);
 }
 
 std::vector<std_msgs::msg::ColorRGBA> LegClusterTracking::generateColors(int num_clusters) {
