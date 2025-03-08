@@ -466,20 +466,26 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     }
 
     // 30cm以内なら停止
-    if (target_distance <= 0.3) {
+    if (target_distance <= STOP_DISTANCE_THRESHOLD) {
         RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");
         cmd_vel_publisher_->publish(cmd_msg); // 速度0を送信
         return;
     }
 
-    // 前方への移動速度を計算
-    double max_speed = 0.1;
-    double min_speed = 0.05;
-    cmd_msg.linear.x = std::min(max_speed, std::max(min_speed, (target_distance - 0.3) * 0.5));
+    // 現在の誤差を計算
+    double error_dist = target_distance - STOP_DISTANCE_THRESHOLD;
+    double error_angle = target_angle;
 
-    // 旋回速度を計算
-    double max_turn_speed = M_PI / 4.0;
-    cmd_msg.angular.z = std::min(max_turn_speed, std::max(-max_turn_speed, target_angle * 2.0));
+    // 誤差の積分項を更新
+    integral_dist += error_dist;
+    integral_angle += error_angle;
+
+    // PID計算
+    double linear_velocity = (KP_DIST * error_dist) + (KI_DIST * integral_dist);
+    double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
+
+    cmd_msg.linear.x = std::clamp(linear_velocity, MIN_SPEED, MAX_SPEED);
+    cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
 
     // 速度をパブリッシュ
     cmd_vel_publisher_->publish(cmd_msg);

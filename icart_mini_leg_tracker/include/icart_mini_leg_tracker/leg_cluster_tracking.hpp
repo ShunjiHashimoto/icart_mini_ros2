@@ -28,6 +28,18 @@
 #define CLUSTER_TOLERANCE 0.05
 #define LOST_CLUSTER_TIMEOUT 2.0 
 #define FOOT_DISTANCE_THRESHOLD 0.3
+#define STOP_DISTANCE_THRESHOLD 0.3
+
+// 速度制限
+#define MAX_SPEED 0.1
+#define MIN_SPEED 0.05
+#define MAX_TURN_SPEED M_PI / 4.0
+
+// PID制御用のゲイン
+#define KP_DIST  0.5
+#define KI_DIST 0.01
+#define KP_ANGLE 0.5 
+#define KI_ANGLE 0.01
 
 class LegClusterTracking : public rclcpp::Node {
 public:
@@ -79,6 +91,10 @@ private:
     int previous_target_id_;
     bool is_target_initialized_;
     bool stop_by_joystick_;
+    
+    // PID
+    double prev_error_dist = 0.0, integral_dist = 0.0;
+    double prev_error_angle = 0.0, integral_angle = 0.0;
 
     // ROS2 ノード関連
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
