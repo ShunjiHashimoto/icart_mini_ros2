@@ -186,13 +186,39 @@ void LegClusterTracking::calculateClusterVelocities(
             velocity.x = (current_center.x - prev_center.x) / delta_time;
             velocity.y = (current_center.y - prev_center.y) / delta_time;
             velocity.z = 0.0;  // 2Dなのでzは0
-            // 速度が大きすぎる場合は制限をかける（異常値対策）
-            double speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-            if (speed > 1.0) {  // 最大1.0 m/s に制限
-                velocity.x *= (1.0 / speed);
-                velocity.y *= (1.0 / speed);
+
+            // 速度履歴を保存
+            if (cluster_velocity_history_.count(id) > 0) {
+                cluster_velocity_history_[id].push_back(velocity);
+                if (cluster_velocity_history_[id].size() > 5) {  // 最大5フレーム分保持
+                    cluster_velocity_history_[id].erase(cluster_velocity_history_[id].begin());
+                }
+            } else {
+                cluster_velocity_history_[id] = {velocity};
             }
-            cluster_velocities_[id] = velocity;
+
+            // 平均化して異常値を抑える
+            geometry_msgs::msg::Vector3 smoothed_velocity;
+            smoothed_velocity.x = 0.0;
+            smoothed_velocity.y = 0.0;
+            smoothed_velocity.z = 0.0;
+            for (const auto &v : cluster_velocity_history_[id]) {
+                smoothed_velocity.x += v.x;
+                smoothed_velocity.y += v.y;
+            }
+            int history_size = cluster_velocity_history_[id].size();
+            smoothed_velocity.x /= history_size;
+            smoothed_velocity.y /= history_size;
+
+            // 速度が異常に大きい場合は制限をかける
+            double speed = sqrt(smoothed_velocity.x * smoothed_velocity.x + smoothed_velocity.y * smoothed_velocity.y);
+            if (speed > 1.0) {  // 最大1.0 m/s に制限
+                smoothed_velocity.x *= (1.0 / speed);
+                smoothed_velocity.y *= (1.0 / speed);
+            }
+
+            cluster_velocities_[id] = smoothed_velocity;
+            RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 速度ベクトル: (%.2f, %.2f)", id, smoothed_velocity.x, smoothed_velocity.y);
         }
     }
     previous_time_ = current_time;  // 次回のために時間を更新
@@ -290,10 +316,11 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
             if (cluster_velocities_.count(prev_id) > 0) {
                 const auto &velocity = cluster_velocities_[prev_id];
                 double delta_time = (this->get_clock()->now() - previous_time_).seconds();
-                predicted_center.x += velocity.x * delta_time;
-                predicted_center.y += velocity.y * delta_time;
+                predicted_center.x += velocity.x * delta_time * PREDICTED_VEL_GAIN;
+                predicted_center.y += velocity.y * delta_time * PREDICTED_VEL_GAIN;
             }
             double dist = calculateDistance(current_center, predicted_center);
+            
             if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance) {
                 min_distance = dist;
                 matched_id = prev_id;
@@ -452,7 +479,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
     RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
-    publishCmdVel(distance_to_target, angle_to_target);
+    // publishCmdVel(distance_to_target, angle_to_target);
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {

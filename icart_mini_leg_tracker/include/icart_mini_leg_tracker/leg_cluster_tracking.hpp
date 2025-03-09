@@ -34,6 +34,7 @@
 #define MAX_SPEED 0.1
 #define MIN_SPEED 0.05
 #define MAX_TURN_SPEED M_PI / 4.0
+#define PREDICTED_VEL_GAIN 0.5
 
 // PID制御用のゲイン
 #define KP_DIST  0.5
@@ -88,6 +89,7 @@ private:
     std::map<int, std::pair<geometry_msgs::msg::Point, rclcpp::Time>> lost_clusters_;
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
+    std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
     int previous_target_id_;
     bool is_target_initialized_;
     bool stop_by_joystick_;
