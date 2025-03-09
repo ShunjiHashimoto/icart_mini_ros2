@@ -42,7 +42,6 @@ $ ros2 launch icart_mini_description icart_mini_display.launch.py
 [i-Cart](https://github.com/BND-tc/i-Cart)は、i-Cartシリーズのモデルデータおよびパラメータファイル
 
 # Technical Overview
-
 ### Preprocessing (前処理)
 LiDARデータを用いたクラスタ追跡を行う前に、データのノイズ除去や前処理を実施。
 
@@ -83,6 +82,10 @@ LiDARデータを用いたクラスタ追跡を行う前に、データのノイ
 2. **失われたクラスタの復活**
    - 一時的に検出されなくなったクラスタを、**過去の速度ベクトルから予測** し、一致すれば復活させる (`LOST_CLUSTER_TIMEOUT` 以内)
 
+3. **クラスタIDの履歴を活用**
+   - `cluster_id_history_` を用いて、過去のIDを保持し、一貫性のあるIDを割り当てる
+   - 過去5フレームのクラスタID履歴を保持し、急激なID変化を防止
+
 ---
 
 ### Following (クラスタ追従)
@@ -106,4 +109,6 @@ LiDARデータを用いたクラスタ追跡を行う前に、データのノイ
 
 1. **クラスタごとの点群 (`/leg_tracker/cluster_markers`)**
 2. **クラスタの中心 (`/leg_tracker/cluster_centers`)**
+3. **追従対象 (`/leg_tracker/target_marker`)**
 <img src=.docs/imgs/clustering.png width=50%>
+
