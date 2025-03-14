@@ -18,6 +18,7 @@
 #include <pcl/point_types.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <fstream>
 
 // 定数定義
 #define MAX_NOISE_DISTANCE_THRESH 0.005  
@@ -60,6 +61,8 @@ private:
         const std::vector<geometry_msgs::msg::Point> &points, 
         const std::vector<int> &clusters);
     double calculateDistance(const geometry_msgs::msg::Point &p1, const geometry_msgs::msg::Point &p2); 
+    void saveClusterDataToCSV(const std::map<int, std::vector<int>>& cluster_id_history_,
+        const std::map<int, geometry_msgs::msg::Vector3>& cluster_velocities_,  const std::map<int, geometry_msgs::msg::Point>& current_centers);
 
     // トラッキング関連
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers);
@@ -93,6 +96,8 @@ private:
     int previous_target_id_;
     bool is_target_initialized_;
     bool stop_by_joystick_;
+    int current_target_id_;  // 追従対象のクラスタID
+    int current_second_id_;  // 追従対象のクラスタID
     
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;

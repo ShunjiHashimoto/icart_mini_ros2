@@ -244,7 +244,54 @@ bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg
     }
 }
 
-    // 前回のクラスタをもとにトラッキング
+
+void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<int>>& cluster_id_history_,
+                          const std::map<int, geometry_msgs::msg::Vector3>& cluster_velocities_, const std::map<int, geometry_msgs::msg::Point>& current_centers) {
+    std::ofstream csv_file("/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv", std::ios::app);
+    if (!csv_file.is_open()) {
+        RCLCPP_ERROR(this->get_logger(), "CSVファイルを開けませんでした。");
+        return;
+    }
+
+    // ヘッダーを書き込む（ファイルが新規作成の場合のみ）
+    static bool is_header_written = false;
+    if (!is_header_written) {
+        csv_file << "追従対象ID1,追従対象ID2,クラスタID,履歴,速度X,速度Y,位置X, 位置Y" << std::endl;
+        is_header_written = true;
+    }
+
+    // 各クラスタの情報を書き込む
+    for (const auto& [cluster_id, history] : cluster_id_history_) {
+        csv_file << this->current_target_id_  << "," << this->current_second_id_ << "," << cluster_id << ",";
+        // 履歴をカンマ区切りで記録
+        for (size_t i = 0; i < history.size(); i++) {
+            csv_file << history[i];
+            if (i < history.size() - 1) csv_file << " ";
+        }
+        csv_file << ",";
+        // 速度情報を書き込む
+        if (cluster_velocities_.count(cluster_id)) {
+            csv_file << cluster_velocities_.at(cluster_id).x << ","
+                     << cluster_velocities_.at(cluster_id).y;
+        } else {
+            csv_file << "0,0"; // デフォルト値
+        }
+
+        if (current_centers.count(cluster_id)) {
+            csv_file << current_centers.at(cluster_id).x << ","
+                     << current_centers.at(cluster_id).y;
+        } else {
+            csv_file << "0,0"; // デフォルト値
+        }
+        csv_file << std::endl;
+    }
+    csv_file << " ----------------------- " << std::endl;
+
+    csv_file.close();
+    RCLCPP_INFO(this->get_logger(), "クラスタデータをCSVに保存しました。");
+}
+
+// 前回のクラスタをもとにトラッキング
 void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
     cluster_id_mapping_.clear();
     std::map<int, bool> matched_previous;
@@ -471,6 +518,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // ターゲットを更新
     previous_target_id_ = target_id;
+    this->current_target_id_ = target_id;
+    this->current_second_id_ = second_id;
 
     publishTargetMarker(target_pos);
 
@@ -479,7 +528,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
     RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
-    // publishCmdVel(distance_to_target, angle_to_target);
+    publishCmdVel(distance_to_target, angle_to_target);
+    this->saveClusterDataToCSV(cluster_id_history_, cluster_velocities_, cluster_centers);
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
