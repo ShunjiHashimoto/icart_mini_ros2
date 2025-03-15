@@ -1,7 +1,24 @@
 #include "icart_mini_leg_tracker/leg_cluster_tracking.hpp"
 
+void resetCSVFile() {
+    std::ofstream csv_file(FILENAME, std::ios::trunc); // ファイルをリセット（上書き）
+
+    if (!csv_file.is_open()) {
+        RCLCPP_ERROR(rclcpp::get_logger("CSV_Manager"), "CSVファイルを開けませんでした。");
+        return;
+    }
+
+    // ヘッダーを書き込む
+    csv_file << "追従対象ID1,追従対象ID2,クラスタID,履歴,速度X,速度Y,位置X, 位置Y" << std::endl;
+
+    csv_file.close();
+    RCLCPP_INFO(rclcpp::get_logger("CSV_Manager"), "CSVファイルをリセットしました。");
+}
+
 LegClusterTracking::LegClusterTracking() : Node("leg_cluster_tracking_node"),
     next_cluster_id_(1), is_ready_for_tracking(false), is_target_initialized_(false), stop_by_joystick_(false) {
+    resetCSVFile();
+
     lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
         "/scan", rclcpp::QoS(10).best_effort(), 
         std::bind(&LegClusterTracking::scanCallback, this, std::placeholders::_1)
@@ -66,14 +83,18 @@ std::vector<geometry_msgs::msg::Point> LegClusterTracking::generateXYPoints(cons
 }
 
 void LegClusterTracking::removeNoise(std::vector<geometry_msgs::msg::Point> &points) {
+    std::vector<bool> to_remove(points.size(), false);
     for (size_t i = 0; i < points.size(); i++) {
         for (size_t j = i + 1; j < points.size(); j++) {
             double dist = sqrt(pow(points[i].x - points[j].x, 2) + pow(points[i].y - points[j].y, 2));
             if (dist < MAX_NOISE_DISTANCE_THRESH) {
-                points[j].x = points[j].y = 0.0;
+                to_remove[j] = true;
             }
         }
     }
+    points.erase(std::remove_if(points.begin(), points.end(),
+                [&](const geometry_msgs::msg::Point &p) { return to_remove[&p - &points[0]]; }),
+                points.end());
 }
 
 void LegClusterTracking::downSampling(std::vector<geometry_msgs::msg::Point> &points) {
@@ -93,6 +114,9 @@ std::vector<int> LegClusterTracking::makeClustersPCL(const std::vector<geometry_
 
     // PCLのPointCloudに変換
     for (const auto &point : points) {
+        double distance = sqrt(point.x * point.x + point.y * point.y);
+        if (distance > MAX_CLUSTER_DISTANCE) continue; // 遠すぎる点はスキップ]
+        
         pcl::PointXYZ pcl_point;
         pcl_point.x = point.x;
         pcl_point.y = point.y;
@@ -247,17 +271,10 @@ bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg
 
 void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<int>>& cluster_id_history_,
                           const std::map<int, geometry_msgs::msg::Vector3>& cluster_velocities_, const std::map<int, geometry_msgs::msg::Point>& current_centers) {
-    std::ofstream csv_file("/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv", std::ios::app);
+    std::ofstream csv_file(FILENAME, std::ios::app);
     if (!csv_file.is_open()) {
         RCLCPP_ERROR(this->get_logger(), "CSVファイルを開けませんでした。");
         return;
-    }
-
-    // ヘッダーを書き込む（ファイルが新規作成の場合のみ）
-    static bool is_header_written = false;
-    if (!is_header_written) {
-        csv_file << "追従対象ID1,追従対象ID2,クラスタID,履歴,速度X,速度Y,位置X, 位置Y" << std::endl;
-        is_header_written = true;
     }
 
     // 各クラスタの情報を書き込む
@@ -278,7 +295,7 @@ void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<in
         }
 
         if (current_centers.count(cluster_id)) {
-            csv_file << current_centers.at(cluster_id).x << ","
+            csv_file << "," << current_centers.at(cluster_id).x << ","
                      << current_centers.at(cluster_id).y;
         } else {
             csv_file << "0,0"; // デフォルト値
@@ -398,12 +415,12 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
     // 最終マッピング結果を出力
     std::map<int, geometry_msgs::msg::Point> updated_centers;
-    std::cout << "   前回のクラスタID   |   現在のクラスタID\n";
-    std::cout << "----------------------------------------\n";
+    // std::cout << "   前回のクラスタID   |   現在のクラスタID\n";
+    // std::cout << "----------------------------------------\n";
     for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
         updated_centers[previous_id] = current_centers[current_id];
-        std::cout << std::setw(10) << previous_id << "           |   "
-                  << std::setw(10) << current_id << "\n";
+        // std::cout << std::setw(10) << previous_id << "           |   "
+                //   << std::setw(10) << current_id << "\n";
     }
     for (const auto &[cluster_id, history] : cluster_id_history_) {
         std::cout << "クラスタ " << cluster_id << " の履歴: ";

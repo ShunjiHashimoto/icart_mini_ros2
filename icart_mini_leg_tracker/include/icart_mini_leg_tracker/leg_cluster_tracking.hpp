@@ -30,6 +30,7 @@
 #define LOST_CLUSTER_TIMEOUT 2.0 
 #define FOOT_DISTANCE_THRESHOLD 0.3
 #define STOP_DISTANCE_THRESHOLD 0.3
+#define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
 
 // 速度制限
 #define MAX_SPEED 0.1
@@ -42,6 +43,9 @@
 #define KI_DIST 0.01
 #define KP_ANGLE 0.5 
 #define KI_ANGLE 0.01
+
+// ログファイル
+#define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
 
 class LegClusterTracking : public rclcpp::Node {
 public:
