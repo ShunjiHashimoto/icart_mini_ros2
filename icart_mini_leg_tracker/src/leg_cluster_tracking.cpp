@@ -285,8 +285,16 @@ void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<in
             csv_file << history[i];
             if (i < history.size() - 1) csv_file << " ";
         }
+        // 位置情報を書き込む
         csv_file << ",";
+        if (current_centers.count(cluster_id)) {
+            csv_file << "," << current_centers.at(cluster_id).x << ","
+                     << current_centers.at(cluster_id).y;
+        } else {
+            csv_file << "0,0"; // デフォルト値
+        }
         // 速度情報を書き込む
+        csv_file << ",";
         if (cluster_velocities_.count(cluster_id)) {
             csv_file << cluster_velocities_.at(cluster_id).x << ","
                      << cluster_velocities_.at(cluster_id).y;
@@ -294,12 +302,6 @@ void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<in
             csv_file << "0,0"; // デフォルト値
         }
 
-        if (current_centers.count(cluster_id)) {
-            csv_file << "," << current_centers.at(cluster_id).x << ","
-                     << current_centers.at(cluster_id).y;
-        } else {
-            csv_file << "0,0"; // デフォルト値
-        }
         csv_file << std::endl;
     }
     csv_file << " ----------------------- " << std::endl;
@@ -312,6 +314,7 @@ void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<in
 void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
     cluster_id_mapping_.clear();
     std::map<int, bool> matched_previous;
+    std::map<int, int> temp_cluster_mapping_;  // 仮のクラスタマッピング（ロストクラスタ用）
 
     // 以前のクラスタを初期化
     if (previous_cluster_centers_.empty()) {
@@ -335,10 +338,11 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
             rclcpp::Time lost_time = it->second.second;
 
             // 一定時間経過したクラスタは破棄
-            double elapsed_time = (this->get_clock()->now() - lost_time).seconds();
+            double elapsed_time = this->get_clock()->now().seconds() - lost_time.seconds();
             if (elapsed_time > LOST_CLUSTER_TIMEOUT) {
                 it = lost_clusters_.erase(it);
                 lost_cluster_velocities_.erase(lost_id);
+                cluster_id_history_.erase(lost_id);
                 continue;
             }
 
@@ -352,16 +356,15 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
             // 距離を比較してマッチング候補を決定
             double dist = calculateDistance(current_center, predicted_center);
-            if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance) {
+            if (dist < CLUSTER_LOST_MATCHED_THRESH && dist < min_distance) {
                 min_distance = dist;
                 matched_id = lost_id;
             }
             ++it;
         }
 
-        // マッチング成功ならIDを復活
         if (matched_id != -1) {
-            cluster_id_mapping_[current_id] = matched_id;
+            temp_cluster_mapping_[current_id] = matched_id;
             lost_clusters_.erase(matched_id);
             lost_cluster_velocities_.erase(matched_id);
             std::cout << "失われたクラスタID " << matched_id << " が復活" << std::endl;
@@ -390,6 +393,15 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
                 matched_id = prev_id;
             }
         }
+        // ここでロストクラスタと前回のクラスタの両方を比較し、最適なものを採用
+        if (temp_cluster_mapping_.count(current_id) > 0) {
+            int lost_matched_id = temp_cluster_mapping_[current_id];
+            double lost_dist = calculateDistance(current_center, lost_clusters_[lost_matched_id].first);
+
+            if (matched_id == -1 || lost_dist < min_distance) {
+                matched_id = lost_matched_id;  // ロストクラスタのIDを採用
+            }
+        }
         // マッチしたクラスタIDをマッピング、なければ新規付与
         if (matched_id != -1) {
             cluster_id_mapping_[current_id] = matched_id;
@@ -415,19 +427,8 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
     // 最終マッピング結果を出力
     std::map<int, geometry_msgs::msg::Point> updated_centers;
-    // std::cout << "   前回のクラスタID   |   現在のクラスタID\n";
-    // std::cout << "----------------------------------------\n";
     for (const auto &[current_id, previous_id] : cluster_id_mapping_) {
         updated_centers[previous_id] = current_centers[current_id];
-        // std::cout << std::setw(10) << previous_id << "           |   "
-                //   << std::setw(10) << current_id << "\n";
-    }
-    for (const auto &[cluster_id, history] : cluster_id_history_) {
-        std::cout << "クラスタ " << cluster_id << " の履歴: ";
-        for (int past_id : history) {
-            std::cout << past_id << " ";
-        }
-        std::cout << "\n";
     }
 
     this->calculateClusterVelocities(updated_centers, this->get_clock()->now());
