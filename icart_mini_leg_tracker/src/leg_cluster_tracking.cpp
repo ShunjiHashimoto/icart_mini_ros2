@@ -30,7 +30,7 @@ LegClusterTracking::LegClusterTracking() : Node("leg_cluster_tracking_node"),
     cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/leg_tracker/cluster_markers", 10);
     center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_centers", 10);
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
-    target_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/leg_tracker/target_marker", 10);
+    person_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/person_marker", 10);
 
     color_palette_ = generateColors(1000);  // 最大100クラスタ用のカラーを事前生成
 
@@ -567,7 +567,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     this->current_target_id_ = target_id;
     this->current_second_id_ = second_id;
 
-    publishTargetMarker(target_pos);
+    publishPersonMarker(target_pos);
 
     // 目標地点への移動指令
     double angle_to_target = atan2(target_pos.y, target_pos.x);
@@ -695,25 +695,54 @@ void LegClusterTracking::publishMatchedClusterCenters(const std::map<int, geomet
     center_marker_publisher_->publish(marker_array);
 }
 
-void LegClusterTracking::publishTargetMarker(const geometry_msgs::msg::Point &target_pos) {
-    visualization_msgs::msg::Marker marker;
-    marker.header.frame_id = "laser";
-    marker.header.stamp = this->get_clock()->now();
-    marker.ns = "target_marker";
-    marker.id = 999;  // ユニークなID
-    marker.type = visualization_msgs::msg::Marker::SPHERE;
-    marker.action = visualization_msgs::msg::Marker::ADD;
-    marker.pose.position = target_pos;
-    marker.pose.orientation.w = 1.0;
-    marker.scale.x = 0.1;
-    marker.scale.y = 0.1;
-    marker.scale.z = 0.1;
-    marker.color.r = 1.0;
-    marker.color.g = 0.0;
-    marker.color.b = 0.0;
-    marker.color.a = 1.0;  // 透明度
+void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &target_pos) {
+    visualization_msgs::msg::MarkerArray markers;
+    std::string frame_id = "laser";
+    std::string ns = "person_marker";
+    int marker_id = 999; // 一意の ID を付与
 
-    target_marker_publisher_->publish(marker);
+    // 胴体の Cylinder マーカー
+    visualization_msgs::msg::Marker body_marker;
+    body_marker.header.frame_id = frame_id;
+    body_marker.header.stamp = this->get_clock()->now();
+    body_marker.ns = ns;
+    body_marker.id = marker_id++;
+    body_marker.type = visualization_msgs::msg::Marker::CYLINDER;
+    body_marker.action = visualization_msgs::msg::Marker::ADD;
+    body_marker.pose.position.x = target_pos.x;
+    body_marker.pose.position.y = target_pos.y;
+    body_marker.pose.position.z = 0.1;  // 胴体の中心
+    body_marker.scale.x = 0.1;  // 胴体の直径
+    body_marker.scale.y = 0.1;
+    body_marker.scale.z = 0.3;  // 胴体の高さ
+    body_marker.color.r = 0.0;
+    body_marker.color.g = 1.0;
+    body_marker.color.b = 0.0;
+    body_marker.color.a = 0.5;
+    markers.markers.push_back(body_marker);
+
+    // 頭部の Sphere マーカー
+    visualization_msgs::msg::Marker head_marker;
+    head_marker.header.frame_id = frame_id;
+    head_marker.header.stamp = this->get_clock()->now();
+    head_marker.ns = ns;
+    head_marker.id = marker_id++;
+    head_marker.type = visualization_msgs::msg::Marker::SPHERE;
+    head_marker.action = visualization_msgs::msg::Marker::ADD;
+    head_marker.pose.position.x = target_pos.x;
+    head_marker.pose.position.y = target_pos.y;
+    head_marker.pose.position.z = 0.3;  // 頭の位置
+    head_marker.scale.x = 0.1;  // 頭の直径
+    head_marker.scale.y = 0.1;
+    head_marker.scale.z = 0.1;
+    head_marker.color.r = 0.0;
+    head_marker.color.g = 1.0;
+    head_marker.color.b = 0.0;
+    head_marker.color.a = 0.5;
+    markers.markers.push_back(head_marker);
+
+    // マーカーをパブリッシュ
+    person_marker_publisher_->publish(markers);
 }
 
 std::vector<std_msgs::msg::ColorRGBA> LegClusterTracking::generateColors(int num_clusters) {

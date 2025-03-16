@@ -42,8 +42,8 @@
 // PID制御用のゲイン
 #define KP_DIST  0.5
 #define KI_DIST 0.01
-#define KP_ANGLE 0.5 
-#define KI_ANGLE 0.01
+#define KP_ANGLE 1.0 
+#define KI_ANGLE 0.001
 
 // ログファイル
 #define FILENAME "/root/icart_ws/src/icart_mini_r.os2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
@@ -80,7 +80,7 @@ private:
     // 可視化関連
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
     void publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers);
-    void publishTargetMarker(const geometry_msgs::msg::Point &target_pos);
+    void publishPersonMarker(const geometry_msgs::msg::Point &target_pos);
     std::vector<std_msgs::msg::ColorRGBA> generateColors(int num_clusters);
 
     // 移動制御
@@ -113,7 +113,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr cluster_marker_publisher_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr person_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
 };
