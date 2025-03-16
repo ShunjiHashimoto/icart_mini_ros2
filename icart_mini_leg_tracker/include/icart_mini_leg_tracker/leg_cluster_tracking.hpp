@@ -37,7 +37,7 @@
 #define MAX_SPEED 0.1
 #define MIN_SPEED 0.05
 #define MAX_TURN_SPEED M_PI / 4.0
-#define PREDICTED_VEL_GAIN 0.5
+#define PREDICTED_VEL_GAIN 0.1
 
 // PID制御用のゲイン
 #define KP_DIST  0.5
@@ -46,7 +46,7 @@
 #define KI_ANGLE 0.01
 
 // ログファイル
-#define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
+#define FILENAME "/root/icart_ws/src/icart_mini_r.os2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
 
 class LegClusterTracking : public rclcpp::Node {
 public:
@@ -99,6 +99,7 @@ private:
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
     std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
     int previous_target_id_;
+    int previous_second_id_;
     bool is_target_initialized_;
     bool stop_by_joystick_;
     int current_target_id_;  // 追従対象のクラスタID
