@@ -25,9 +25,10 @@
 #define MAX_SAMPLING_INTERVAL 0.001      
 #define MIN_CLUSTER_SIZE 10              
 #define MAX_CLUSTER_SIZE 100             
-#define CLUSTER_MATCHED_THRESH 0.3  
+#define CLUSTER_MATCHED_THRESH 0.2 // クラスタとのマッチング閾値  
+#define CLUSTER_LOST_MATCHED_THRESH 0.2 // 失われたクラスタとのマッチング閾値  
 #define CLUSTER_TOLERANCE 0.05
-#define LOST_CLUSTER_TIMEOUT 2.0 
+#define LOST_CLUSTER_TIMEOUT 1.0 
 #define FOOT_DISTANCE_THRESHOLD 0.3
 #define STOP_DISTANCE_THRESHOLD 0.3
 #define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
