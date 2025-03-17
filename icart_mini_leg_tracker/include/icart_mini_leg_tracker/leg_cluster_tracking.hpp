@@ -78,6 +78,8 @@ private:
         const std::map<int, geometry_msgs::msg::Point> &current_centers, 
         const rclcpp::Time &current_time);
     bool filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers);
+    int initializeTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, geometry_msgs::msg::Point &target_pos);
+    bool verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
 
     // 可視化関連
@@ -101,6 +103,7 @@ private:
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
     std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
+    int target_id = -1;
     int previous_target_id_;
     int previous_second_id_;
     bool is_target_initialized_;
