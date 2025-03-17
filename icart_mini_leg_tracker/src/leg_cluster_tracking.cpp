@@ -310,24 +310,7 @@ void LegClusterTracking::saveClusterDataToCSV(const std::map<int, std::vector<in
     RCLCPP_INFO(this->get_logger(), "クラスタデータをCSVに保存しました。");
 }
 
-// 前回のクラスタをもとにトラッキング
-void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
-    cluster_id_mapping_.clear();
-    std::map<int, bool> matched_previous;
-    std::map<int, int> temp_cluster_mapping_;  // 仮のクラスタマッピング（ロストクラスタ用）
-
-    // 以前のクラスタを初期化
-    if (previous_cluster_centers_.empty()) {
-        previous_cluster_centers_ = current_centers;
-        return;
-    }
-    
-    // 前回のクラスタをまだマッチしていない状態に初期化
-    for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
-        matched_previous[prev_id] = false;
-    }
-
-    // 【1】まずは失われたクラスタとマッチングを試みる
+void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Point> &current_centers, std::map<int, int> &temp_cluster_mapping_) {
     for (auto &[current_id, current_center] : current_centers) {
         double min_distance = std::numeric_limits<double>::max();
         int matched_id = -1;
@@ -370,8 +353,10 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
             std::cout << "失われたクラスタID " << matched_id << " が復活" << std::endl;
         }
     }
+}
 
-    // 【2】前回のクラスタと比較して最も近いクラスタを探す
+// 前回のクラスタとマッチングを試みる関数
+void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg::Point> &current_centers, std::map<int, int> &temp_cluster_mapping_, std::map<int, bool> &matched_previous) {
     for (auto &[current_id, current_center] : current_centers) {
         if (cluster_id_mapping_.count(current_id) > 0) continue;  // すでにマッチ済み
 
@@ -393,15 +378,16 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
                 matched_id = prev_id;
             }
         }
+
         // ここでロストクラスタと前回のクラスタの両方を比較し、最適なものを採用
         if (temp_cluster_mapping_.count(current_id) > 0) {
             int lost_matched_id = temp_cluster_mapping_[current_id];
             double lost_dist = calculateDistance(current_center, lost_clusters_[lost_matched_id].first);
-
             if (matched_id == -1 || lost_dist < min_distance) {
                 matched_id = lost_matched_id;  // ロストクラスタのIDを採用
             }
         }
+
         // マッチしたクラスタIDをマッピング、なければ新規付与
         if (matched_id != -1) {
             cluster_id_mapping_[current_id] = matched_id;
@@ -414,8 +400,10 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
             cluster_id_mapping_[current_id] = next_cluster_id_++;
         }
     }
+}
 
-    // 【3】マッチしなかったクラスタを"失われたクラスタ"として保存
+// マッチしなかったクラスタを失われたクラスタとして保存する関数
+void LegClusterTracking::storeLostClusters(std::map<int, bool> &matched_previous) {
     for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
         if (!matched_previous[prev_id]) {
             lost_clusters_[prev_id] = {prev_center, this->get_clock()->now()};
@@ -424,6 +412,32 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
             }
         }
     }
+}
+
+// 前回のクラスタをもとにトラッキング
+void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers) {
+    cluster_id_mapping_.clear();
+    std::map<int, bool> matched_previous;
+    std::map<int, int> temp_cluster_mapping_;  // 仮のクラスタマッピング（ロストクラスタ用）
+
+    // 以前のクラスタを初期化
+    if (previous_cluster_centers_.empty()) {
+        previous_cluster_centers_ = current_centers;
+        return;
+    }
+    // 前回のクラスタをまだマッチしていない状態に初期化
+    for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
+        matched_previous[prev_id] = false;
+    }
+
+    // 【1】まずは失われたクラスタとマッチングを試みる
+    this->matchLostClusters(current_centers, temp_cluster_mapping_);
+
+    // 【2】前回のクラスタと比較して最も近いクラスタを探す
+    this->matchPreviousClusters(current_centers, temp_cluster_mapping_, matched_previous);
+
+    // 【3】マッチしなかったクラスタを"失われたクラスタ"として保存
+    this->storeLostClusters(matched_previous);
 
     // 最終マッピング結果を出力
     std::map<int, geometry_msgs::msg::Point> updated_centers;
