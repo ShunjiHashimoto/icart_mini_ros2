@@ -431,13 +431,13 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
     }
 
     // 【1】まずは失われたクラスタとマッチングを試みる
-    this->matchLostClusters(current_centers, temp_cluster_mapping_);
+    matchLostClusters(current_centers, temp_cluster_mapping_);
 
     // 【2】前回のクラスタと比較して最も近いクラスタを探す
-    this->matchPreviousClusters(current_centers, temp_cluster_mapping_, matched_previous);
+    matchPreviousClusters(current_centers, temp_cluster_mapping_, matched_previous);
 
     // 【3】マッチしなかったクラスタを"失われたクラスタ"として保存
-    this->storeLostClusters(matched_previous);
+    storeLostClusters(matched_previous);
 
     // 最終マッピング結果を出力
     std::map<int, geometry_msgs::msg::Point> updated_centers;
@@ -445,7 +445,7 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
         updated_centers[previous_id] = current_centers[current_id];
     }
 
-    this->calculateClusterVelocities(updated_centers, this->get_clock()->now());
+    calculateClusterVelocities(updated_centers, this->get_clock()->now());
     // 最新のクラスタ中心を保存
     previous_cluster_centers_ = updated_centers;
     current_centers = updated_centers; 
@@ -485,15 +485,77 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
     return false;
 }
 
-void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
-    const double MOVEMENT_THRESHOLD = 0.5;  // 急激な移動と判定する閾値
+std::optional<std::pair<int, geometry_msgs::msg::Point>> 
+LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
+                                    const geometry_msgs::msg::Point &previous_target_pos, 
+                                    bool previous_target_found) {
+    double min_movement = std::numeric_limits<double>::max();  // 前回の対象との移動距離
+    double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
+    int new_target_id = -1;
+    geometry_msgs::msg::Point new_target_pos;
 
+    for (const auto &[current_id, current_center] : cluster_centers) {
+        double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);  // ロボットとの距離
+        double movement_from_prev = std::numeric_limits<double>::max();  // 初期化
+
+        if (previous_target_found) {
+            movement_from_prev = sqrt(pow(current_center.x - previous_target_pos.x, 2) + 
+                                      pow(current_center.y - previous_target_pos.y, 2));
+        }
+
+        // 【優先度】 (1) できるだけ前回の対象に近い → (2) ロボットから近い
+        if (!previous_target_found || movement_from_prev < MOVEMENT_THRESHOLD) {  
+            if (movement_from_prev < min_movement) {
+                min_movement = movement_from_prev;
+                new_target_id = current_id;
+                new_target_pos = current_center;
+            }
+        } else if (new_target_id == -1 || dist < min_distance) {
+            min_distance = dist;
+            new_target_id = current_id;
+            new_target_pos = current_center;
+        }
+    }
+
+    if (new_target_id == -1) {
+        return std::nullopt;  // 追従対象なし
+    }
+
+    return std::make_pair(new_target_id, new_target_pos);
+}
+
+std::optional<std::pair<int, geometry_msgs::msg::Point>> 
+LegClusterTracking::findSecondaryCluster(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
+                                         int primary_target_id, 
+                                         const geometry_msgs::msg::Point &primary_target_pos) {
+    int second_id = -1;
+    geometry_msgs::msg::Point second_center;
+    for (const auto &[current_id, current_center] : cluster_centers) {
+        if (current_id == primary_target_id) continue;
+        double dist = sqrt(pow(current_center.x - primary_target_pos.x, 2) + 
+                           pow(current_center.y - primary_target_pos.y, 2));
+        if (dist < FOOT_DISTANCE_THRESHOLD) {
+            second_id = current_id;
+            second_center = current_center;
+            return std::make_pair(second_id, second_center);
+        }
+    }
+    return std::nullopt;  // 近くに適切なクラスタなし
+}
+
+void LegClusterTracking::updateTrackingState(int target_id, int second_id) {
+    previous_target_id_ = target_id;
+    previous_second_id_ = second_id;
+    this->current_target_id_ = target_id;
+    this->current_second_id_ = second_id;
+}
+
+void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
+    // 【1】最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
     if (cluster_centers.empty()) {
         publishCmdVel(0.0, 0.0);  // 停止指令を送信
         return;
     }
-
-    // 最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
     geometry_msgs::msg::Point target_pos;
     if (!is_target_initialized_) {
         int target_id = this->initializeTarget(cluster_centers, target_pos);
@@ -510,90 +572,47 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         return;
     }
 
-    // 【1】前回の追従対象がまだ存在しているか確認
+    // 【2】前回の追従対象がまだ存在しているか確認
     double movement = std::numeric_limits<double>::max();  // 移動距離の初期値
     bool previous_target_found = this->verifyPreviousTarget(cluster_centers, target_id, target_pos, movement);
 
-    // 【2】移動が大きすぎる場合 or 前回の対象が見つからなかった場合、新しい対象を探す
+    // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
-        double min_movement = std::numeric_limits<double>::max();  // 前回の対象との移動距離
-        double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
-        int new_target_id = -1;
-        geometry_msgs::msg::Point new_target_pos;
-
-        for (const auto &[current_id, current_center] : cluster_centers) {
-            double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);  // ロボットとの距離
-            double movement_from_prev = std::numeric_limits<double>::max();  // 初期化
-
-            if (previous_target_found) {
-                movement_from_prev = sqrt(pow(current_center.x - target_pos.x, 2) + pow(current_center.y - target_pos.y, 2));
-            }
-
-            // 【優先度】 (1) できるだけ前回の対象に近い → (2) ロボットから近い
-            if (!previous_target_found || movement_from_prev < MOVEMENT_THRESHOLD) {  // しきい値内なら候補にする
-                if (movement_from_prev < min_movement) {
-                    min_movement = movement_from_prev;
-                    new_target_id = current_id;
-                    new_target_pos = current_center;
-                }
-            } else if (new_target_id == -1 || dist < min_distance) {
-                min_distance = dist;
-                new_target_id = current_id;
-                new_target_pos = current_center;
-            }
-        }
-
-        if (new_target_id == -1) {
+        auto new_target = selectNewTarget(cluster_centers, target_pos, previous_target_found);
+        if (!new_target.has_value()) {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
             return;
         }
-
-        target_id = new_target_id;
-        target_pos = new_target_pos;
-        RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択 [前回との差: %.3f]", target_id, min_movement);
+        target_id = new_target->first;
+        target_pos = new_target->second;
+        RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
     }
 
-    // 近くにもう1つのクラスタがあるかチェック
+    // 【4】近くにもう1つのクラスタがあるかチェック
     // TODO: 前回のクラスタIDのものがあれば、それに追従する
     int second_id = -1;
-    geometry_msgs::msg::Point second_center;
-    
-    for (const auto &[current_id, current_center] : cluster_centers) {
-        if (current_id == target_id) continue;
-
-        double dist = sqrt(pow(current_center.x - target_pos.x, 2) + pow(current_center.y - target_pos.y, 2));
-        if (dist < FOOT_DISTANCE_THRESHOLD) {
-            second_id = current_id;
-            second_center = current_center;
-            break;
-        }
-    }
-
-    // 追従位置を決定
-    if (second_id != -1) {
-        target_pos.x = (target_pos.x + second_center.x) / 2.0;
-        target_pos.y = (target_pos.y + second_center.y) / 2.0;
+    auto second_target = findSecondaryCluster(cluster_centers, target_id, target_pos);
+    if (second_target.has_value()) {
+        target_pos.x = (target_pos.x + second_target->second.x) / 2.0;
+        target_pos.y = (target_pos.y + second_target->second.y) / 2.0;
+        second_id = second_target->first;
         RCLCPP_INFO(this->get_logger(), "2つのクラスタを選択: ID %d と ID %d", target_id, second_id);
     } else {
         RCLCPP_INFO(this->get_logger(), "単独クラスタを追従: ID %d", target_id);
     }
 
-    // ターゲットを更新
-    previous_target_id_ = target_id;
-    previous_second_id_ = second_id;
-    this->current_target_id_ = target_id;
-    this->current_second_id_ = second_id;
-
+    // 【5】追従対象を更新
+    updateTrackingState(target_id, second_id);
     publishPersonMarker(target_pos);
 
-    // 目標地点への移動指令
+    // 【6】目標地点への移動指令
     double angle_to_target = atan2(target_pos.y, target_pos.x);
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
     RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
     publishCmdVel(distance_to_target, angle_to_target);
-    this->saveClusterDataToCSV(cluster_id_history_, cluster_velocities_, cluster_centers);
+    saveClusterDataToCSV(cluster_id_history_, cluster_velocities_, cluster_centers);
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
@@ -605,8 +624,7 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
         cmd_vel_publisher_->publish(cmd_msg);
         return;
     }
-
-    // 30cm以内なら停止
+    // 31cm以内なら停止
     if (target_distance <= STOP_DISTANCE_THRESHOLD) {
         RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");
         cmd_vel_publisher_->publish(cmd_msg); // 速度0を送信
@@ -616,15 +634,12 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     // 現在の誤差を計算
     double error_dist = target_distance - STOP_DISTANCE_THRESHOLD;
     double error_angle = target_angle;
-
     // 誤差の積分項を更新
     integral_dist += error_dist;
     integral_angle += error_angle;
-
     // PID計算
     double linear_velocity = (KP_DIST * error_dist) + (KI_DIST * integral_dist);
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
-
     cmd_msg.linear.x = std::clamp(linear_velocity, MIN_SPEED, MAX_SPEED);
     cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
 

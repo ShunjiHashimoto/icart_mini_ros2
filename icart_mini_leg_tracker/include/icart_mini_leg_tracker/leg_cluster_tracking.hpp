@@ -29,9 +29,10 @@
 #define CLUSTER_LOST_MATCHED_THRESH 0.2 // 失われたクラスタとのマッチング閾値  
 #define CLUSTER_TOLERANCE 0.05
 #define LOST_CLUSTER_TIMEOUT 1.0 
-#define FOOT_DISTANCE_THRESHOLD 0.3
-#define STOP_DISTANCE_THRESHOLD 0.3
+#define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
+#define STOP_DISTANCE_THRESHOLD 0.3 //[m]
 #define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
+#define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
 
 // 速度制限
 #define MAX_SPEED 0.1
@@ -80,6 +81,15 @@ private:
     bool filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     int initializeTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, geometry_msgs::msg::Point &target_pos);
     bool verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement);
+    std::optional<std::pair<int, geometry_msgs::msg::Point>> selectNewTarget(
+        const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
+        const geometry_msgs::msg::Point &previous_target_pos, 
+        bool previous_target_found);
+    std::optional<std::pair<int, geometry_msgs::msg::Point>> findSecondaryCluster(
+        const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
+        int primary_target_id, 
+        const geometry_msgs::msg::Point &primary_target_pos);
+    void updateTrackingState(int target_id, int second_id);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
 
     // 可視化関連
