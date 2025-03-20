@@ -1,0 +1,26 @@
+#ifndef CSV_LOGGER_HPP
+#define CSV_LOGGER_HPP
+
+#include <rclcpp/rclcpp.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
+#include <map>
+#include <vector>
+#include <fstream>
+#include <string>
+
+class CSVLogger {
+public:
+    explicit CSVLogger(const std::string &filename);
+
+    void resetCSVFile();
+    void saveClusterData(const std::map<int, std::vector<int>>& cluster_id_history_,
+                         const std::map<int, geometry_msgs::msg::Vector3>& cluster_velocities_,
+                         const std::map<int, geometry_msgs::msg::Point>& current_centers,
+                         int current_target_id_, int current_second_id_);
+
+private:
+    std::string filename_;
+};
+
+#endif  // CSV_LOGGER_HPP

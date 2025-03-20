@@ -18,19 +18,41 @@ find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 
 # ヘッダーファイルのディレクトリを追加
-include_directories(include)
+include_directories(
+  include 
+  include/icart_mini_leg_tracker
+  include/icart_mini_leg_tracker/utils)
 
+# ライブラリの設定
+add_library(marker_helper src/utils/marker_helper.cpp)
+add_library(csv_logger src/utils/csv_logger.cpp)
 # 実行ファイルの設定
 add_executable(leg_cluster_tracking_node src/leg_cluster_tracking.cpp)
 
-# 必要なライブラリをリンク
+# ライブラリをリンク
+target_link_libraries(leg_cluster_tracking_node
+  marker_helper
+  csv_logger
+)
+
+# 依存パッケージの設定
 ament_target_dependencies(leg_cluster_tracking_node 
-    rclcpp 
-    sensor_msgs 
-    geometry_msgs  # 追加
-    visualization_msgs 
-    pcl_ros 
-    pcl_conversions
+  rclcpp 
+  sensor_msgs 
+  geometry_msgs 
+  visualization_msgs 
+  pcl_ros 
+  pcl_conversions
+)
+ament_target_dependencies(marker_helper 
+  rclcpp 
+  geometry_msgs
+  visualization_msgs
+)
+ament_target_dependencies(csv_logger 
+  rclcpp 
+  std_msgs
+  geometry_msgs
 )
 
 # インストール設定

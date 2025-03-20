@@ -19,6 +19,8 @@
 #include <pcl/search/kdtree.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <fstream>
+#include "icart_mini_leg_tracker/utils/marker_helper.hpp"
+#include "icart_mini_leg_tracker/utils/csv_logger.hpp"
 
 // 定数定義
 #define MAX_NOISE_DISTANCE_THRESH 0.005  
@@ -47,7 +49,7 @@
 #define KI_ANGLE 0.001
 
 // ログファイル
-#define FILENAME "/root/icart_ws/src/icart_mini_r.os2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
+#define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
 
 class LegClusterTracking : public rclcpp::Node {
 public:
@@ -96,11 +98,10 @@ private:
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
     void publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers);
     void publishPersonMarker(const geometry_msgs::msg::Point &target_pos);
-    std::vector<std_msgs::msg::ColorRGBA> generateColors(int num_clusters);
-
+    
     // 移動制御
     void publishCmdVel(double target_distance, double target_angle);
-
+    
     // メンバ変数
     std::map<int, int> cluster_id_mapping_;
     std::map<int, geometry_msgs::msg::Point> previous_cluster_centers_;
@@ -124,11 +125,15 @@ private:
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;
     double prev_error_angle = 0.0, integral_angle = 0.0;
+    
+    // utils
+    std::shared_ptr<MarkerHelper> marker_helper_;
+    std::shared_ptr<CSVLogger> csv_logger_;
 
     // ROS2 ノード関連
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscriber_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr cluster_marker_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr cluster_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr person_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
