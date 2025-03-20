@@ -44,6 +44,7 @@ void CSVLogger::saveClusterData(const std::map<int, std::vector<int>>& cluster_i
         }
         csv_file << std::endl;
     }
+    csv_file << " --------- " << std::endl;
     csv_file.close();
     RCLCPP_INFO(rclcpp::get_logger("CSV_Manager"), "クラスタデータをCSVに保存しました。");
 }
