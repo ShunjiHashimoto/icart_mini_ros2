@@ -649,12 +649,13 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::CYLINDER,
         target_pos, 0.1, 0.1, 0.3, -1, 0.0, 1.0, 0.0, 0.5);
+    body_marker.pose.position.z += 0.15;
     markers.markers.push_back(body_marker);
 
     visualization_msgs::msg::Marker head_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::SPHERE,
         target_pos, 0.1, 0.1, 0.1, -1, 0.0, 1.0, 0.0, 0.5);
-    head_marker.pose.position.z += 0.2;
+    head_marker.pose.position.z += 0.35;
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);
