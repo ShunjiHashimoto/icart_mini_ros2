@@ -8,6 +8,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include "icart_mini_leg_tracker/msg/cluster_info.hpp"
 
 class CSVLogger {
 public:

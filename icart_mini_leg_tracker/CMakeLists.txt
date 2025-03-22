@@ -16,18 +16,26 @@ find_package(tf2_ros REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 # ヘッダーファイルのディレクトリを追加
 include_directories(
   include 
   include/icart_mini_leg_tracker
   include/icart_mini_leg_tracker/utils)
+  
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/ClusterInfo.msg"
+  DEPENDENCIES geometry_msgs std_msgs
+)
 
 # ライブラリの設定
 add_library(marker_helper src/utils/marker_helper.cpp)
 add_library(csv_logger src/utils/csv_logger.cpp)
 # 実行ファイルの設定
 add_executable(leg_cluster_tracking_node src/leg_cluster_tracking.cpp)
+rosidl_target_interfaces(leg_cluster_tracking_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+rosidl_target_interfaces(csv_logger ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # ライブラリをリンク
 target_link_libraries(leg_cluster_tracking_node
