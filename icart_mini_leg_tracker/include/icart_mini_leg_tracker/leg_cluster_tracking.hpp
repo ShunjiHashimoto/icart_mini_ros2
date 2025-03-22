@@ -35,6 +35,7 @@
 #define STOP_DISTANCE_THRESHOLD 0.3 //[m]
 #define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
+#define STATIC_SPEED_THRESHOLD 0.05 // 静止状態と判定するしきい値[m/s]
 
 // 速度制限
 #define MAX_SPEED 0.1
@@ -50,6 +51,13 @@
 
 // ログファイル
 #define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
+
+struct ClusterInfo {
+    int id;
+    geometry_msgs::msg::Point center;
+    geometry_msgs::msg::Vector3 velocity;
+    bool is_static = false;  
+};
 
 class LegClusterTracking : public rclcpp::Node {
 public:
@@ -69,8 +77,6 @@ private:
         const std::vector<geometry_msgs::msg::Point> &points, 
         const std::vector<int> &clusters);
     double calculateDistance(const geometry_msgs::msg::Point &p1, const geometry_msgs::msg::Point &p2); 
-    void saveClusterDataToCSV(const std::map<int, std::vector<int>>& cluster_id_history_,
-        const std::map<int, geometry_msgs::msg::Vector3>& cluster_velocities_,  const std::map<int, geometry_msgs::msg::Point>& current_centers);
 
     // トラッキング関連
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers);
@@ -114,6 +120,7 @@ private:
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
     std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
+    std::map<int, ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
     int target_id = -1;
     int previous_target_id_;
     int previous_second_id_;

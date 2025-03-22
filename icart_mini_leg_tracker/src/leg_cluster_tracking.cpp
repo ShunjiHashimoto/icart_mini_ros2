@@ -233,8 +233,9 @@ void LegClusterTracking::calculateClusterVelocities(
                 smoothed_velocity.x *= (1.0 / speed);
                 smoothed_velocity.y *= (1.0 / speed);
             }
+            bool is_static = (speed < STATIC_SPEED_THRESHOLD);
+            cluster_info_map_[id] = ClusterInfo{id, current_center, smoothed_velocity, is_static};
 
-            cluster_velocities_[id] = smoothed_velocity;
             RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 速度ベクトル: (%.2f, %.2f)", id, smoothed_velocity.x, smoothed_velocity.y);
         }
     }
@@ -316,8 +317,8 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
 
         for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
             geometry_msgs::msg::Point predicted_center = prev_center;
-            if (cluster_velocities_.count(prev_id) > 0) {
-                const auto &velocity = cluster_velocities_[prev_id];
+            if (cluster_info_map_.count(prev_id) > 0) {
+                const auto &velocity = cluster_info_map_[prev_id].velocity;
                 double delta_time = (this->get_clock()->now() - previous_time_).seconds();
                 predicted_center.x += velocity.x * delta_time * PREDICTED_VEL_GAIN;
                 predicted_center.y += velocity.y * delta_time * PREDICTED_VEL_GAIN;
@@ -358,8 +359,8 @@ void LegClusterTracking::storeLostClusters(std::map<int, bool> &matched_previous
     for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
         if (!matched_previous[prev_id]) {
             lost_clusters_[prev_id] = {prev_center, this->get_clock()->now()};
-            if (cluster_velocities_.count(prev_id) > 0) {
-                lost_cluster_velocities_[prev_id] = cluster_velocities_[prev_id];
+            if (cluster_info_map_.count(prev_id) > 0) {
+                lost_cluster_velocities_[prev_id] = cluster_info_map_[prev_id].velocity;
             }
         }
     }
