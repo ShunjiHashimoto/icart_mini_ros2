@@ -16,8 +16,7 @@ void CSVLogger::resetCSVFile() {
 }
 
 void CSVLogger::saveClusterData(const std::map<int, std::vector<int>>& cluster_id_history_,
-                                const std::map<int, geometry_msgs::msg::Vector3>& cluster_velocities_,
-                                const std::map<int, geometry_msgs::msg::Point>& current_centers,
+                                const std::map<int, icart_msg::ClusterInfo>& cluster_infos_,
                                 int current_target_id_, int current_second_id_) {
     std::ofstream csv_file(filename_, std::ios::app);
     if (!csv_file.is_open()) {
@@ -31,16 +30,13 @@ void CSVLogger::saveClusterData(const std::map<int, std::vector<int>>& cluster_i
             if (i < history.size() - 1) csv_file << " ";
         }
         csv_file << ",";
-        if (current_centers.count(cluster_id)) {
-            csv_file << current_centers.at(cluster_id).x << "," << current_centers.at(cluster_id).y;
+
+        if (cluster_infos_.count(cluster_id)) {
+            const auto& info = cluster_infos_.at(cluster_id);
+            csv_file << info.center.x << "," << info.center.y << ",";
+            csv_file << info.velocity.x << "," << info.velocity.y;
         } else {
-            csv_file << "0,0";
-        }
-        csv_file << ",";
-        if (cluster_velocities_.count(cluster_id)) {
-            csv_file << cluster_velocities_.at(cluster_id).x << "," << cluster_velocities_.at(cluster_id).y;
-        } else {
-            csv_file << "0,0";
+            csv_file << "0,0,0,0";
         }
         csv_file << std::endl;
     }
