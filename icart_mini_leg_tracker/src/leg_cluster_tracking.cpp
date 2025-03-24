@@ -232,15 +232,23 @@ void LegClusterTracking::calculateClusterVelocities(
                 smoothed_velocity.x *= (1.0 / speed);
                 smoothed_velocity.y *= (1.0 / speed);
             }
-            bool is_static = (speed < STATIC_SPEED_THRESHOLD);
+            if (speed < STATIC_SPEED_THRESHOLD) {
+                cluster_static_frame_count_[id]++;
+            } else {
+                cluster_static_frame_count_[id] = 0;  // 動いたらリセット
+            }
+            bool is_static = (cluster_static_frame_count_[id] > STATIC_FRAME_LIMIT && current_target_id_ != id && current_second_id_ != id);
             icart_msg::ClusterInfo info;
             info.id = id;
             info.center = current_center;
             info.velocity = smoothed_velocity;
             info.is_static = is_static;
             cluster_info_map_[id] = info;
+            if (is_static) {
+                RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
+            }
 
-            RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 速度ベクトル: (%.2f, %.2f)", id, smoothed_velocity.x, smoothed_velocity.y);
+            // RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 速度ベクトル: (%.2f, %.2f)", id, smoothed_velocity.x, smoothed_velocity.y);
         }
     }
     previous_time_ = current_time;  // 次回のために時間を更新

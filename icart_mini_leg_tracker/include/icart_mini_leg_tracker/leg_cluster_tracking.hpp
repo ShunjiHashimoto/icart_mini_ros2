@@ -30,13 +30,14 @@
 #define MAX_CLUSTER_SIZE 100             
 #define CLUSTER_MATCHED_THRESH 0.2 // クラスタとのマッチング閾値  
 #define CLUSTER_LOST_MATCHED_THRESH 0.2 // 失われたクラスタとのマッチング閾値  
-#define CLUSTER_TOLERANCE 0.05
-#define LOST_CLUSTER_TIMEOUT 1.0 
+#define CLUSTER_TOLERANCE 0.05 // ?m以内の点を同じクラスタにする[m]
+#define LOST_CLUSTER_TIMEOUT 1.0 // 失われたクラスタのタイムアウト[s]
 #define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
 #define STOP_DISTANCE_THRESHOLD 0.3 //[m]
 #define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
-#define STATIC_SPEED_THRESHOLD 0.05 // 静止状態と判定するしきい値[m/s]
+#define STATIC_SPEED_THRESHOLD 0.1 // 静止状態と判定するしきい値[m/s]
+#define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
 
 // 速度制限
 #define MAX_SPEED 0.1
@@ -125,6 +126,7 @@ private:
     bool stop_by_joystick_;
     int current_target_id_;  // 追従対象のクラスタID
     int current_second_id_;  // 追従対象のクラスタID
+    std::map<int, int> cluster_static_frame_count_;  // クラスタの静止フレーム数
     
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;
