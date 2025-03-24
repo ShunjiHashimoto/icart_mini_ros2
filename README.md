@@ -33,10 +33,25 @@ $ ros2 launch icart_mini_description icart_mini_display.launch.py
 
 # Required Packages
 ### YP-Spur(YamabicoProject-Spur) 
-[Yp-Spur](https://github.com/openspur/yp-spur)は、移動ロボット用のオープンソースソフトウェアで、ロボットのモーションコントロールをシンプルかつ効率的に行うためのツールです。ビルド方法はYp-SpurのGitHubページを参照ください。      
+[Yp-Spur](https://github.com/openspur/yp-spur)は、移動ロボット用のオープンソースソフトウェアで、ロボットのモーションコントロールをシンプルかつ効率的に行うためのツールです。ビルド方法はYp-SpurのGitHubページを参照ください。下記は一例です。       
+```bash
+$ cd icart_ws
+$ mkdir build
+$ cd build
+$ cmake ../src/yp-spur
+$ make
+$ sudo make install
+```
+下記は、yp-spurをros2で使用するためのパッケージです。  
+```bash
+colcon build --symlink-install --packages-select icart_mini_ypspur_bridge
+```
 
 ### urg_node2
-[urg_node2](https://github.com/ShunjiHashimoto/urg_node2.git)は、Hokuyo製LiDARセンサーのデータをROS 2トピックとして配信するためのパッケージ
+[urg_node2](https://github.com/ShunjiHashimoto/urg_node2.git)は、Hokuyo製LiDARセンサーのデータをROS 2トピックとして配信するためのパッケージ  
+```bash
+$ colcon build --symlink-install --packages-select urg_node2
+```
 
 ### i-Cart
 [i-Cart](https://github.com/BND-tc/i-Cart)は、i-Cartシリーズのモデルデータおよびパラメータファイル
