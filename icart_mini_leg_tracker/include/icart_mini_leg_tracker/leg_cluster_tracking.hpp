@@ -54,6 +54,16 @@
 // ログファイル
 #define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
 
+
+
+struct ClusterInfo {
+     int id;
+     geometry_msgs::msg::Point center;
+     geometry_msgs::msg::Vector3 velocity;
+     bool is_static = false;  
+ };
+
+
 namespace icart_msg = icart_mini_leg_tracker::msg;
 
 class LegClusterTracking : public rclcpp::Node {
@@ -117,7 +127,10 @@ private:
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
     std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
-    std::map<int, icart_msg::ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
+
+    std::map<int, ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
+    
+    // std::map<int, icart_msg::ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
     std::map<int, icart_msg::ClusterInfo> previous_cluster_info_map_;  // 前回のクラスタ情報
     int target_id = -1;
     int previous_target_id_;
