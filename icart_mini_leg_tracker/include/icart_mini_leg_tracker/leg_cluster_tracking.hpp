@@ -127,9 +127,6 @@ private:
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
     std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
-
-    // std::map<int, ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
-    
     std::map<int, icart_msg::ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
     std::map<int, icart_msg::ClusterInfo> previous_cluster_info_map_;  // 前回のクラスタ情報
     int target_id = -1;

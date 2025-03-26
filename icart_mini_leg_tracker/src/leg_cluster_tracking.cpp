@@ -420,7 +420,6 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
     calculateClusterVelocities(updated_centers, this->get_clock()->now());
     // 最新のクラスタ中心を保存
-    previous_cluster_centers_ = updated_centers;
     // previous_cluster_info_map_.clear();
     for (const auto& [id, center] : updated_centers) {
         previous_cluster_info_map_[id].center = center;
@@ -590,7 +589,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
     publishCmdVel(distance_to_target, angle_to_target);
 
-    // csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
+    csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
