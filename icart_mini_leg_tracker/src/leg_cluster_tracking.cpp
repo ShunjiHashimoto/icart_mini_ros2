@@ -188,7 +188,6 @@ void LegClusterTracking::calculateClusterVelocities(
     const rclcpp::Time &current_time) 
 {
     if (previous_cluster_info_map_.empty() || previous_time_.nanoseconds() == 0) {
-    // if (previous_cluster_centers_.empty() || previous_time_.nanoseconds() == 0) {
         previous_time_ = current_time;
         return;  // 最初のフレームは速度計算をスキップ
     }
@@ -200,8 +199,6 @@ void LegClusterTracking::calculateClusterVelocities(
     for (const auto &[id, current_center] : current_centers) {
         if (previous_cluster_info_map_.count(id) > 0) {
             const auto &prev_center = previous_cluster_info_map_[id].center;
-        // if (previous_cluster_centers_.count(id) > 0) {
-        //     const auto &prev_center = previous_cluster_centers_[id];
             geometry_msgs::msg::Vector3 velocity;
             velocity.x = (current_center.x - prev_center.x) / delta_time;
             velocity.y = (current_center.y - prev_center.y) / delta_time;
@@ -243,18 +240,16 @@ void LegClusterTracking::calculateClusterVelocities(
             }
             cluster_velocities_[id] = smoothed_velocity;
             bool is_static = (cluster_static_frame_count_[id] > STATIC_FRAME_LIMIT && current_target_id_ != id && current_second_id_ != id);
-            cluster_info_map_[id] = ClusterInfo{id, current_center, smoothed_velocity, is_static};
-            // icart_msg::ClusterInfo info;
-            // info.id = id;
-            // info.center = current_center;
-            // info.velocity = smoothed_velocity;
-            // info.is_static = is_static;
-            // cluster_info_map_[id] = info;
+            // cluster_info_map_[id] = ClusterInfo{id, current_center, smoothed_velocity, is_static};
+            icart_msg::ClusterInfo info;
+            info.id = id;
+            info.center = current_center;
+            info.velocity = smoothed_velocity;
+            info.is_static = is_static;
+            cluster_info_map_[id] = info;
             if (is_static) {
                 RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
             }
-
-            // RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 速度ベクトル: (%.2f, %.2f)", id, smoothed_velocity.x, smoothed_velocity.y);
         }
     }
     previous_time_ = current_time;  // 次回のために時間を更新
@@ -335,12 +330,8 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
 
         for (const auto &[prev_id, prev_info] : previous_cluster_info_map_) {
             geometry_msgs::msg::Point predicted_center = prev_info.center;
-        // for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
-        //     geometry_msgs::msg::Point predicted_center = prev_center;
             if (cluster_info_map_.count(prev_id) > 0) {
                 const auto &velocity = cluster_info_map_[prev_id].velocity;
-            // if (cluster_velocities_.count(prev_id) > 0) {
-            //     const auto &velocity = cluster_velocities_[prev_id];
                 double delta_time = (this->get_clock()->now() - previous_time_).seconds();
                 predicted_center.x += velocity.x * delta_time * PREDICTED_VEL_GAIN;
                 predicted_center.y += velocity.y * delta_time * PREDICTED_VEL_GAIN;
@@ -379,16 +370,11 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
 // マッチしなかったクラスタを失われたクラスタとして保存する関数
 void LegClusterTracking::storeLostClusters(std::map<int, bool> &matched_previous) {
     for (const auto &[prev_id, prev_info] : previous_cluster_info_map_) {
-    // for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
         if (!matched_previous[prev_id]) {
             lost_clusters_[prev_id] = {prev_info.center, this->get_clock()->now()};
-            // lost_clusters_[prev_id] = {prev_center, this->get_clock()->now()};
             if (cluster_info_map_.count(prev_id) > 0) {
                 lost_cluster_velocities_[prev_id] = cluster_info_map_[prev_id].velocity;
             }
-            // if (cluster_velocities_.count(prev_id) > 0) {
-            //     lost_cluster_velocities_[prev_id] = cluster_velocities_[prev_id];
-            // }
         }
     }
 }
@@ -401,7 +387,6 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
     if (previous_cluster_info_map_.empty()) {
         // 初期化として current_centers の ID に対する ClusterInfo を作って保存
-    // if (previous_cluster_centers_.empty()) {
         previous_cluster_centers_ = current_centers;
         for (const auto& [id, center] : current_centers) {
             icart_msg::ClusterInfo info;
@@ -411,11 +396,9 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
             info.is_static = false;
             previous_cluster_info_map_[id] = info;
         }
-        // previous_time_ = this->get_clock()->now();
         return;
     }
     // 前回のクラスタをまだマッチしていない状態に初期化
-    // for (const auto &[prev_id, prev_center] : previous_cluster_centers_) {
     for (const auto &[prev_id, prev_info] : previous_cluster_info_map_) {
         matched_previous[prev_id] = false;
     }
