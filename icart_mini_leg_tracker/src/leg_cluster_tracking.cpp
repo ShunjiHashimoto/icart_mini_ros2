@@ -22,6 +22,7 @@ LegClusterTracking::LegClusterTracking() :
     center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_centers", 10);
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
     person_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/person_marker", 10);
+    cluster_info_publisher_ = this->create_publisher<icart_msg::ClusterInfoArray>("/leg_tracker/cluster_infos", 10);
 
     RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
 }
@@ -53,6 +54,7 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
         std::cout << "========================================\n\n";
         publishClusterMarkers(points, clusters);
         publishMatchedClusterCenters(cluster_centers);
+        publishClusterInfoMap();
     }
     auto end_time = this->get_clock()->now();
     auto duration = (end_time - start_time).seconds();  // 経過時間（秒）
@@ -183,10 +185,55 @@ double LegClusterTracking::calculateDistance(const geometry_msgs::msg::Point &p1
     return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
 }
 
+void LegClusterTracking::smoothAndFilterVelocities(const std::map<int, geometry_msgs::msg::Point> &current_centers) {
+    for (const auto &[id, raw_velocity] : cluster_velocities_) {
+        geometry_msgs::msg::Vector3 velocity = raw_velocity;
+
+        // 履歴に追加
+        cluster_velocity_history_[id].push_back(velocity);
+        if (cluster_velocity_history_[id].size() > 5) {
+            cluster_velocity_history_[id].erase(cluster_velocity_history_[id].begin());
+        }
+
+        // 平滑化
+        geometry_msgs::msg::Vector3 smoothed_velocity{};
+        for (const auto &v : cluster_velocity_history_[id]) {
+            smoothed_velocity.x += v.x;
+            smoothed_velocity.y += v.y;
+        }
+        int size = cluster_velocity_history_[id].size();
+        smoothed_velocity.x /= size;
+        smoothed_velocity.y /= size;
+        // 最大速度制限
+        double speed = sqrt(smoothed_velocity.x * smoothed_velocity.x + smoothed_velocity.y * smoothed_velocity.y);
+        if (speed > 1.0) {
+            smoothed_velocity.x *= (1.0 / speed);
+            smoothed_velocity.y *= (1.0 / speed);
+        }
+        // 静止クラスタのカウント
+        if (speed < STATIC_SPEED_THRESHOLD) {
+            cluster_static_frame_count_[id]++;
+        } else {
+            cluster_static_frame_count_[id] = 0;
+        }
+        // is_static 判定 & 保存
+        bool is_static = (cluster_static_frame_count_[id] > STATIC_FRAME_LIMIT && current_target_id_ != id && current_second_id_ != id);
+
+        icart_msg::ClusterInfo info;
+        info.id = id;
+        info.center = current_centers.at(id);
+        info.velocity = smoothed_velocity;
+        info.is_static = is_static;
+        cluster_info_map_[id] = info;
+        // if (is_static) {
+        //     RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
+        // }
+    }
+}
+
 void LegClusterTracking::calculateClusterVelocities(
     const std::map<int, geometry_msgs::msg::Point> &current_centers, 
-    const rclcpp::Time &current_time) 
-{
+    const rclcpp::Time &current_time) {
     if (previous_cluster_info_map_.empty() || previous_time_.nanoseconds() == 0) {
         previous_time_ = current_time;
         return;  // 最初のフレームは速度計算をスキップ
@@ -202,56 +249,11 @@ void LegClusterTracking::calculateClusterVelocities(
             geometry_msgs::msg::Vector3 velocity;
             velocity.x = (current_center.x - prev_center.x) / delta_time;
             velocity.y = (current_center.y - prev_center.y) / delta_time;
-            velocity.z = 0.0;  // 2Dなのでzは0
-
-            // 速度履歴を保存
-            if (cluster_velocity_history_.count(id) > 0) {
-                cluster_velocity_history_[id].push_back(velocity);
-                if (cluster_velocity_history_[id].size() > 5) {  // 最大5フレーム分保持
-                    cluster_velocity_history_[id].erase(cluster_velocity_history_[id].begin());
-                }
-            } else {
-                cluster_velocity_history_[id] = {velocity};
-            }
-
-            // 平均化して異常値を抑える
-            geometry_msgs::msg::Vector3 smoothed_velocity;
-            smoothed_velocity.x = 0.0;
-            smoothed_velocity.y = 0.0;
-            smoothed_velocity.z = 0.0;
-            for (const auto &v : cluster_velocity_history_[id]) {
-                smoothed_velocity.x += v.x;
-                smoothed_velocity.y += v.y;
-            }
-            int history_size = cluster_velocity_history_[id].size();
-            smoothed_velocity.x /= history_size;
-            smoothed_velocity.y /= history_size;
-
-            // 速度が異常に大きい場合は制限をかける
-            double speed = sqrt(smoothed_velocity.x * smoothed_velocity.x + smoothed_velocity.y * smoothed_velocity.y);
-            if (speed > 1.0) {  // 最大1.0 m/s に制限
-                smoothed_velocity.x *= (1.0 / speed);
-                smoothed_velocity.y *= (1.0 / speed);
-            }
-            if (speed < STATIC_SPEED_THRESHOLD) {
-                cluster_static_frame_count_[id]++;
-            } else {
-                cluster_static_frame_count_[id] = 0;  // 動いたらリセット
-            }
-            cluster_velocities_[id] = smoothed_velocity;
-            bool is_static = (cluster_static_frame_count_[id] > STATIC_FRAME_LIMIT && current_target_id_ != id && current_second_id_ != id);
-            // cluster_info_map_[id] = ClusterInfo{id, current_center, smoothed_velocity, is_static};
-            icart_msg::ClusterInfo info;
-            info.id = id;
-            info.center = current_center;
-            info.velocity = smoothed_velocity;
-            info.is_static = is_static;
-            cluster_info_map_[id] = info;
-            if (is_static) {
-                RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
-            }
+            velocity.z = 0.0;
+            cluster_velocities_[id] = velocity;
         }
     }
+    smoothAndFilterVelocities(current_centers);
     previous_time_ = current_time;  // 次回のために時間を更新
 }
 
@@ -685,6 +687,14 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);
+}
+
+void LegClusterTracking::publishClusterInfoMap() {
+    icart_msg::ClusterInfoArray msg;
+    for (const auto &[id, info] : cluster_info_map_) {
+        msg.clusters.push_back(info); 
+    }
+    cluster_info_publisher_->publish(msg);
 }
 
 int main(int argc, char **argv) {

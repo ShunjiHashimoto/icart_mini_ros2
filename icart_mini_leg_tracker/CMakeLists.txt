@@ -26,6 +26,7 @@ include_directories(
   
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ClusterInfo.msg"
+  "msg/ClusterInfoArray.msg"
   DEPENDENCIES geometry_msgs std_msgs
 )
 

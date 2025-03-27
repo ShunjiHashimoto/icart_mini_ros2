@@ -22,6 +22,7 @@
 #include "icart_mini_leg_tracker/utils/marker_helper.hpp"
 #include "icart_mini_leg_tracker/utils/csv_logger.hpp"
 #include "icart_mini_leg_tracker/msg/cluster_info.hpp"
+#include "icart_mini_leg_tracker/msg/cluster_info_array.hpp"
 
 // 定数定義
 #define MAX_NOISE_DISTANCE_THRESH 0.005  
@@ -54,16 +55,6 @@
 // ログファイル
 #define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
 
-
-
-struct ClusterInfo {
-     int id;
-     geometry_msgs::msg::Point center;
-     geometry_msgs::msg::Vector3 velocity;
-     bool is_static = false;  
- };
-
-
 namespace icart_msg = icart_mini_leg_tracker::msg;
 
 class LegClusterTracking : public rclcpp::Node {
@@ -93,6 +84,7 @@ private:
     void calculateClusterVelocities(
         const std::map<int, geometry_msgs::msg::Point> &current_centers, 
         const rclcpp::Time &current_time);
+    void smoothAndFilterVelocities(const std::map<int, geometry_msgs::msg::Point> &current_centers);
     bool filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     int initializeTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, geometry_msgs::msg::Point &target_pos);
     bool verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement);
@@ -111,6 +103,7 @@ private:
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
     void publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers);
     void publishPersonMarker(const geometry_msgs::msg::Point &target_pos);
+    void publishClusterInfoMap();
     
     // 移動制御
     void publishCmdVel(double target_distance, double target_angle);
@@ -152,6 +145,7 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr cluster_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr person_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;
+    rclcpp::Publisher<icart_msg::ClusterInfoArray>::SharedPtr cluster_info_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
 };
 
