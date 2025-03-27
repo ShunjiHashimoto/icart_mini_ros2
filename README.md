@@ -31,6 +31,13 @@ $ ros2 launch icart_mini_bringup icart_mini_bringup.launch.py
 $ ros2 launch icart_mini_description icart_mini_display.launch.py
 ```
 
+### Debug
+```bash
+$ ros2 bag record /leg_tracker/cluster_infos /scan /tf /tf_static /leg_tracker/cluster_centers /leg_tracker/cluster_markers /leg_tracker/person_marker   
+
+$ ros2 bag play my_bag --rate 0.5 --topics /scan --pause
+```
+
 # Required Packages
 ### YP-Spur(YamabicoProject-Spur) 
 [Yp-Spur](https://github.com/openspur/yp-spur)は、移動ロボット用のオープンソースソフトウェアで、ロボットのモーションコントロールをシンプルかつ効率的に行うためのツールです。ビルド方法はYp-SpurのGitHubページを参照ください。下記は一例です。       
