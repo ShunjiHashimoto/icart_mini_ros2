@@ -225,9 +225,9 @@ void LegClusterTracking::smoothAndFilterVelocities(const std::map<int, geometry_
         info.velocity = smoothed_velocity;
         info.is_static = is_static;
         cluster_info_map_[id] = info;
-        // if (is_static) {
-        //     RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
-        // }
+        if (is_static) {
+            RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
+        }
     }
 }
 
