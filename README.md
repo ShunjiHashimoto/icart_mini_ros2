@@ -33,9 +33,12 @@ $ ros2 launch icart_mini_description icart_mini_display.launch.py
 
 ### Debug
 ```bash
+# 特定のトピックを記録
 $ ros2 bag record /leg_tracker/cluster_infos /scan /tf /tf_static /leg_tracker/cluster_centers /leg_tracker/cluster_markers /leg_tracker/person_marker   
-
-$ ros2 bag play my_bag --rate 0.5 --topics /scan --pause
+# 特定のトピックを再生
+$ ros2 bag play my_bag --rate 0.5 --topics /scan --start-pause
+# 特定のトピックをcsv形式で保存
+$ ros2 topic echo /leg_tracker/cluster_infos --csv > output.csv 
 ```
 
 # Required Packages
