@@ -53,9 +53,10 @@
 #define KP_ANGLE 1.0 
 #define KI_ANGLE 0.001
 
-#define EMERGENCY_BUTTON 4
-#define UNLOCK_EMERGENCY_BUTTON 5
-#define FOLLOWME_BUTTON 7
+#define EMERGENCY_BUTTON 5
+#define UNLOCK_EMERGENCY_BUTTON 4
+#define FOLLOWME_START_BUTTON 7
+#define FOLLOWME_STOP_BUTTON 6
 
 // ログファイル
 #define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
@@ -114,20 +115,22 @@ private:
     void publishCmdVel(double target_distance, double target_angle);
     
     // メンバ変数
-    std::map<int, int> cluster_id_mapping_;
-    std::map<int, geometry_msgs::msg::Point> previous_cluster_centers_;
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_;
     bool is_ready_for_tracking;
     bool start_followme_flag;
-    std::map<int, geometry_msgs::msg::Vector3> cluster_velocities_;
     rclcpp::Time previous_time_;
+    
+    std::map<int, int> cluster_id_mapping_;
+    std::map<int, geometry_msgs::msg::Vector3> cluster_velocities_;
     std::map<int, std::pair<geometry_msgs::msg::Point, rclcpp::Time>> lost_clusters_;
     std::map<int, geometry_msgs::msg::Vector3> lost_cluster_velocities_;
     std::map<int, std::vector<int>> cluster_id_history_;  // クラスタID履歴（複数フレーム分保存）
     std::map<int, std::vector<geometry_msgs::msg::Vector3>> cluster_velocity_history_;  // クラスタごとの速度履歴
     std::map<int, icart_msg::ClusterInfo> cluster_info_map_; // クラスタ情報（ID, 中心座標, 速度, 静止状態）
     std::map<int, icart_msg::ClusterInfo> previous_cluster_info_map_;  // 前回のクラスタ情報
+    std::map<int, int> cluster_static_frame_count_;  // クラスタの静止フレーム数
+
     int target_id = -1;
     int previous_target_id_;
     int previous_second_id_;
@@ -135,7 +138,6 @@ private:
     bool stop_by_joystick_;
     int current_target_id_;  // 追従対象のクラスタID
     int current_second_id_;  // 追従対象のクラスタID
-    std::map<int, int> cluster_static_frame_count_;  // クラスタの静止フレーム数
     
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;

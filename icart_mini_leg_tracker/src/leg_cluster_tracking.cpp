@@ -30,17 +30,32 @@ LegClusterTracking::LegClusterTracking() :
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     if (msg->buttons[EMERGENCY_BUTTON] == 1) {
-        RCLCPP_WARN(this->get_logger(), "ジョイスティック入力でロボットを停止します！");
+        RCLCPP_WARN(this->get_logger(), "非常停止");
         stop_by_joystick_ = true;
         publishCmdVel(0.0, 0.0);
     }
     else if (msg->buttons[UNLOCK_EMERGENCY_BUTTON] == 1) {
-        RCLCPP_WARN(this->get_logger(), "ジョイスティック入力でロボットを解除します！");
+        RCLCPP_WARN(this->get_logger(), "非常停止解除");
         stop_by_joystick_ = false;
     }
-    else if (msg->buttons[FOLLOWME_BUTTON] == 1) {
+    else if (msg->buttons[FOLLOWME_START_BUTTON] == 1) {
         start_followme_flag = true;
-        RCLCPP_WARN(this->get_logger(), "追従開始します");
+        RCLCPP_WARN(this->get_logger(), "追従開始");
+    }
+    else if (msg->buttons[FOLLOWME_STOP_BUTTON] == 1) {
+        start_followme_flag = false;
+        RCLCPP_WARN(this->get_logger(), "追従停止");
+        is_ready_for_tracking = false;
+        is_target_initialized_ = false;
+        cluster_velocities_.clear();
+        cluster_id_mapping_.clear();
+        previous_cluster_info_map_.clear();
+        cluster_info_map_.clear();
+        lost_clusters_.clear();
+        lost_cluster_velocities_.clear();
+        cluster_id_history_.clear();
+        cluster_velocity_history_.clear();
+        cluster_static_frame_count_.clear();
     }
 }
 
@@ -398,7 +413,6 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 
     if (previous_cluster_info_map_.empty()) {
         // 初期化として current_centers の ID に対する ClusterInfo を作って保存
-        previous_cluster_centers_ = current_centers;
         for (const auto& [id, center] : current_centers) {
             icart_msg::ClusterInfo info;
             info.id = id;
