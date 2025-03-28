@@ -45,12 +45,17 @@
 #define MIN_SPEED 0.05
 #define MAX_TURN_SPEED M_PI / 4.0
 #define PREDICTED_VEL_GAIN 0.1
+#define LOST_PREDICTED_VEL_GAIN 0.05
 
 // PID制御用のゲイン
 #define KP_DIST  0.5
 #define KI_DIST 0.01
 #define KP_ANGLE 1.0 
 #define KI_ANGLE 0.001
+
+#define EMERGENCY_BUTTON 4
+#define UNLOCK_EMERGENCY_BUTTON 5
+#define FOLLOWME_BUTTON 7
 
 // ログファイル
 #define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
@@ -114,6 +119,7 @@ private:
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_;
     bool is_ready_for_tracking;
+    bool start_followme_flag;
     std::map<int, geometry_msgs::msg::Vector3> cluster_velocities_;
     rclcpp::Time previous_time_;
     std::map<int, std::pair<geometry_msgs::msg::Point, rclcpp::Time>> lost_clusters_;

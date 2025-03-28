@@ -4,6 +4,7 @@ LegClusterTracking::LegClusterTracking() :
     Node("leg_cluster_tracking_node"),
     next_cluster_id_(1), 
     is_ready_for_tracking(false), 
+    start_followme_flag(false),
     is_target_initialized_(false), 
     stop_by_joystick_(false),
     marker_helper_(std::make_shared<MarkerHelper>(1000)), 
@@ -28,17 +29,24 @@ LegClusterTracking::LegClusterTracking() :
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-    int emergency_button = 4;
-    if (msg->buttons[emergency_button] == 1) {
+    if (msg->buttons[EMERGENCY_BUTTON] == 1) {
         RCLCPP_WARN(this->get_logger(), "ジョイスティック入力でロボットを停止します！");
         stop_by_joystick_ = true;
         publishCmdVel(0.0, 0.0);
-    } else if (msg->buttons[emergency_button] == 0) {
+    }
+    else if (msg->buttons[UNLOCK_EMERGENCY_BUTTON] == 1) {
+        RCLCPP_WARN(this->get_logger(), "ジョイスティック入力でロボットを解除します！");
         stop_by_joystick_ = false;
+    }
+    else if (msg->buttons[FOLLOWME_BUTTON] == 1) {
+        start_followme_flag = true;
+        RCLCPP_WARN(this->get_logger(), "追従開始します");
     }
 }
 
 void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+    if (start_followme_flag == false) return;
+    if (stop_by_joystick_ == true) return;
     auto start_time = this->get_clock()->now();
     auto points = generateXYPoints(msg);
     removeNoise(points);
@@ -224,6 +232,7 @@ void LegClusterTracking::smoothAndFilterVelocities(const std::map<int, geometry_
         info.center = current_centers.at(id);
         info.velocity = smoothed_velocity;
         info.is_static = is_static;
+        info.is_target = (current_target_id_ == id || current_second_id_ == id);
         cluster_info_map_[id] = info;
         if (is_static) {
             RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
@@ -300,8 +309,8 @@ void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Poi
             geometry_msgs::msg::Point predicted_center = lost_center;
             if (lost_cluster_velocities_.count(lost_id) > 0) {
                 const auto &velocity = lost_cluster_velocities_[lost_id];
-                predicted_center.x += velocity.x * elapsed_time;
-                predicted_center.y += velocity.y * elapsed_time;
+                predicted_center.x += velocity.x * elapsed_time * LOST_PREDICTED_VEL_GAIN;
+                predicted_center.y += velocity.y * elapsed_time * LOST_PREDICTED_VEL_GAIN;
             }
 
             // 距離を比較してマッチング候補を決定
