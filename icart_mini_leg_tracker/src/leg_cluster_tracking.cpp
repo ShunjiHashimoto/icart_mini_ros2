@@ -129,24 +129,26 @@ void LegClusterTracking::downSampling(std::vector<geometry_msgs::msg::Point> &po
 
 std::vector<int> LegClusterTracking::makeClustersPCL(const std::vector<geometry_msgs::msg::Point> &points) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-
+    std::vector<int> cloud_to_points_index;  // cloud→元のpointsのインデックス対応
+    
     // PCLのPointCloudに変換
-    for (const auto &point : points) {
-        double distance = sqrt(point.x * point.x + point.y * point.y);
-        if (distance > MAX_CLUSTER_DISTANCE) continue; // 遠すぎる点はスキップ
+    for (size_t i = 0; i < points.size(); ++i) {
+        double distance = sqrt(points[i].x * points[i].x + points[i].y * points[i].y);
+        if (distance > MAX_CLUSTER_DISTANCE) continue;  // フィルタ
         
         pcl::PointXYZ pcl_point;
-        pcl_point.x = point.x;
-        pcl_point.y = point.y;
+        pcl_point.x = points[i].x;
+        pcl_point.y = points[i].y;
         pcl_point.z = 0.0;
         cloud->points.push_back(pcl_point);
+        cloud_to_points_index.push_back(i);  // このcloud点は元のpoints[i]に対応
     }
+        
     // KD-Treeを作成
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     tree->setInputCloud(cloud);
-
-    // クラスタリング実行
-    std::vector<pcl::PointIndices> cluster_indices;
+        
+    std::vector<pcl::PointIndices> cluster_indices; // クラスタのインデックスを格納するベクタ
     pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
     ec.setClusterTolerance(CLUSTER_TOLERANCE);  // 5cm以内の点を同じクラスタにする
     ec.setMinClusterSize(MIN_CLUSTER_SIZE);      // 最小クラスタサイズ
@@ -154,11 +156,14 @@ std::vector<int> LegClusterTracking::makeClustersPCL(const std::vector<geometry_
     ec.setSearchMethod(tree);
     ec.setInputCloud(cloud);
     ec.extract(cluster_indices);
+
+    // クラスタリング実行
     std::vector<int> clusters(points.size(), 0);
     int cluster_id = 1;
     for (const auto &indices : cluster_indices) {
         for (int idx : indices.indices) {
-            clusters[idx] = cluster_id;
+            int original_index = cloud_to_points_index[idx];  // 対応する元のpointsのインデックス
+            clusters[original_index] = cluster_id;
         }
         cluster_id++;
     }

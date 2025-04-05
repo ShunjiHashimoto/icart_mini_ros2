@@ -35,7 +35,7 @@
 #define LOST_CLUSTER_TIMEOUT 1.0 // 失われたクラスタのタイムアウト[s]
 #define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
 #define STOP_DISTANCE_THRESHOLD 0.3 //[m]
-#define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
+#define MAX_CLUSTER_DISTANCE 2.0 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
 #define STATIC_SPEED_THRESHOLD 0.1 // 静止状態と判定するしきい値[m/s]
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
