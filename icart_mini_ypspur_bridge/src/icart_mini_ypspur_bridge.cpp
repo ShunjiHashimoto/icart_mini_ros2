@@ -21,7 +21,7 @@ public:
         }
 
         // 初期設定
-        Spur_set_vel(0.2);
+        Spur_set_vel(0.3);
         Spur_set_accel(1.0);
         Spur_set_angvel(M_PI / 2.0);
         Spur_set_angaccel(M_PI / 2.0);

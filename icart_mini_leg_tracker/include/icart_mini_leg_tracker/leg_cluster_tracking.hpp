@@ -41,7 +41,7 @@
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
 
 // 速度制限
-#define MAX_SPEED 0.1
+#define MAX_SPEED 0.25
 #define MIN_SPEED 0.05
 #define MAX_TURN_SPEED M_PI / 4.0
 #define PREDICTED_VEL_GAIN 0.1
