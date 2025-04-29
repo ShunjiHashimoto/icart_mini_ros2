@@ -645,7 +645,7 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
 
     // 現在の誤差を計算
     double error_dist = target_distance - STOP_DISTANCE_THRESHOLD;
-    double error_angle = target_angle;
+    double error_angle = target_angle; // radian
     // 誤差の積分項を更新
     integral_dist += error_dist;
     integral_angle += error_angle;
@@ -654,6 +654,10 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
     cmd_msg.linear.x = std::clamp(linear_velocity, MIN_SPEED, MAX_SPEED);
     cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
+    if(abs(error_angle) > M_PI/3) {
+        cmd_msg.linear.x = 0.0; //　対象との角度が大きい場合は旋回を優先する
+        cmd_msg.angular.z = (cmd_msg.angular.z > 0) ? MAX_TURN_SPEED : -MAX_TURN_SPEED;
+    }
 
     // 速度をパブリッシュ
     cmd_vel_publisher_->publish(cmd_msg);
