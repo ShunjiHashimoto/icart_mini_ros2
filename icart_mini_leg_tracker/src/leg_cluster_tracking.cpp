@@ -310,7 +310,7 @@ void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Poi
 
             // 一定時間経過したクラスタは破棄
             double elapsed_time = this->get_clock()->now().seconds() - lost_time.seconds();
-            RCLCPP_INFO(this->get_logger(), "失われたクラスタID: %d | 経過時間: %.2f秒", lost_id, elapsed_time);
+            // RCLCPP_INFO(this->get_logger(), "失われたクラスタID: %d | 経過時間: %.2f秒", lost_id, elapsed_time);
             if (elapsed_time > LOST_CLUSTER_TIMEOUT) {
                 it = lost_clusters_.erase(it);
                 lost_cluster_velocities_.erase(lost_id);
@@ -394,7 +394,7 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
 // マッチしなかったクラスタを失われたクラスタとして保存する関数
 void LegClusterTracking::storeLostClusters(std::map<int, bool> &matched_previous) {
     for (const auto &[prev_id, prev_info] : previous_cluster_info_map_) {
-        if (!matched_previous[prev_id]) {
+        if (!matched_previous[prev_id] && lost_clusters_.count(prev_id) == 0) {
             lost_clusters_[prev_id] = {prev_info.center, this->get_clock()->now()};
             if (cluster_info_map_.count(prev_id) > 0) {
                 lost_cluster_velocities_[prev_id] = cluster_info_map_[prev_id].velocity;
@@ -487,7 +487,7 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
 std::optional<std::pair<int, geometry_msgs::msg::Point>> 
 LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
                                     const geometry_msgs::msg::Point &previous_target_pos, 
-                                    bool previous_target_found) {
+                                    bool previous_target_found) { // 前回の対象が見つからなかった場合
     double min_movement = std::numeric_limits<double>::max();  // 前回の対象との移動距離
     double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
     int new_target_id = -1;
