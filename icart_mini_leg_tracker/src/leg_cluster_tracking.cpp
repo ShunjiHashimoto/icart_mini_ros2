@@ -681,7 +681,7 @@ void LegClusterTracking::publishClusterMarkers(
             if (cluster_id_mapping_.count(clusters[i]) > 0) {
                     int mapped_cluster_id = cluster_id_mapping_[clusters[i]];
                     visualization_msgs::msg::Marker marker = marker_helper_->createMarker(
-                        "cluster_markers", i, visualization_msgs::msg::Marker::SPHERE,
+                        "cluster_markers", i, visualization_msgs::msg::Marker::CUBE,
                         points[i], 0.01, 0.01, 0.01, mapped_cluster_id);
                         marker_array.markers.push_back(marker);
                     }
