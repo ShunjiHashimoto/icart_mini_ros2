@@ -246,9 +246,9 @@ void LegClusterTracking::smoothAndFilterVelocities(const std::map<int, geometry_
         info.is_static = is_static;
         info.is_target = (current_target_id_ == id || current_second_id_ == id);
         cluster_info_map_[id] = info;
-        if (is_static) {
-            RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
-        }
+        // if (is_static) {
+        //     RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
+        // }
     }
 }
 
@@ -310,6 +310,7 @@ void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Poi
 
             // 一定時間経過したクラスタは破棄
             double elapsed_time = this->get_clock()->now().seconds() - lost_time.seconds();
+            RCLCPP_INFO(this->get_logger(), "失われたクラスタID: %d | 経過時間: %.2f秒", lost_id, elapsed_time);
             if (elapsed_time > LOST_CLUSTER_TIMEOUT) {
                 it = lost_clusters_.erase(it);
                 lost_cluster_velocities_.erase(lost_id);
@@ -338,7 +339,7 @@ void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Poi
             temp_cluster_mapping_[current_id] = matched_id;
             lost_clusters_.erase(matched_id);
             lost_cluster_velocities_.erase(matched_id);
-            std::cout << "失われたクラスタID " << matched_id << " が復活" << std::endl;
+            // std::cout << "失われたクラスタID " << matched_id << " が復活" << std::endl;
         }
     }
 }
