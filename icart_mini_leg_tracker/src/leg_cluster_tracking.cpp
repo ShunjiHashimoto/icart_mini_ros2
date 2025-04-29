@@ -39,23 +39,14 @@ void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
         stop_by_joystick_ = false;
     }
     else if (msg->buttons[FOLLOWME_START_BUTTON] == 1) {
+        resetFollowTarget();
         start_followme_flag = true;
         RCLCPP_WARN(this->get_logger(), "追従開始");
     }
     else if (msg->buttons[FOLLOWME_STOP_BUTTON] == 1) {
         start_followme_flag = false;
+        resetFollowTarget();
         RCLCPP_WARN(this->get_logger(), "追従停止");
-        is_ready_for_tracking = false;
-        is_target_initialized_ = false;
-        cluster_velocities_.clear();
-        cluster_id_mapping_.clear();
-        previous_cluster_info_map_.clear();
-        cluster_info_map_.clear();
-        lost_clusters_.clear();
-        lost_cluster_velocities_.clear();
-        cluster_id_history_.clear();
-        cluster_velocity_history_.clear();
-        cluster_static_frame_count_.clear();
     }
 }
 
@@ -620,6 +611,20 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     publishCmdVel(distance_to_target, angle_to_target);
 
     csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
+}
+
+void LegClusterTracking::resetFollowTarget() {
+    is_ready_for_tracking = false;
+    is_target_initialized_ = false;
+    cluster_velocities_.clear();
+    cluster_id_mapping_.clear();
+    previous_cluster_info_map_.clear();
+    cluster_info_map_.clear();
+    lost_clusters_.clear();
+    lost_cluster_velocities_.clear();
+    cluster_id_history_.clear();
+    cluster_velocity_history_.clear();
+    cluster_static_frame_count_.clear();
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {

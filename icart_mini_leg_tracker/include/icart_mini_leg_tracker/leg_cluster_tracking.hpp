@@ -104,6 +104,7 @@ private:
         const geometry_msgs::msg::Point &primary_target_pos);
     void updateTrackingState(int target_id, int second_id);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
+    void resetFollowTarget();
 
     // 可視化関連
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
