@@ -20,6 +20,7 @@ visualization_msgs::msg::Marker MarkerHelper::createMarker(
     marker.scale.x = scale_x;
     marker.scale.y = scale_y;
     marker.scale.z = scale_z;
+    marker.lifetime = rclcpp::Duration::from_seconds(0.2); 
 
     if (cluster_id >= 0 && cluster_id < static_cast<int>(color_palette_.size())) {
         marker.color = color_palette_[cluster_id % color_palette_.size()];

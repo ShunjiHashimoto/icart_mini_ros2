@@ -4,6 +4,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <vector>
 #include <random>
+#include <rclcpp/rclcpp.hpp> 
 
 class MarkerHelper {
 public:
