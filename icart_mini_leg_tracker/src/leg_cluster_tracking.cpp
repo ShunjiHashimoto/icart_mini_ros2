@@ -481,6 +481,8 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
         RCLCPP_INFO(this->get_logger(), "前回の追従対象2 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
         return true;
     }
+    RCLCPP_INFO(this->get_logger(), "前回の追従対象（ID: %d）をロスト", target_id);
+    movement = 0.0;
     return false;
 }
 
@@ -581,6 +583,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
+        RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
         if (auto new_target = selectNewTarget(cluster_centers, target_pos, previous_target_found)) {
             target_id = new_target->first;
             target_pos = new_target->second;
@@ -589,6 +592,9 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
             is_lost_target_publisher_->publish(is_lost_target);
+            current_target_id_ = -1;
+            current_second_id_ = -1;
+            csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
             return;
         }
     }
