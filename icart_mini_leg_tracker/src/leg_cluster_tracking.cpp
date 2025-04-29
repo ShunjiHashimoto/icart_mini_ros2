@@ -633,6 +633,7 @@ void LegClusterTracking::resetFollowTarget() {
     cluster_id_history_.clear();
     cluster_velocity_history_.clear();
     cluster_static_frame_count_.clear();
+    next_cluster_id_ = 1;
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
