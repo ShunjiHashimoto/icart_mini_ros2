@@ -8,6 +8,7 @@
 #include "geometry_msgs/msg/point.hpp"
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/joy.hpp>
+#include "std_msgs/msg/bool.hpp" 
 #include <vector>
 #include <cmath>
 #include <map>
@@ -156,6 +157,7 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;
     rclcpp::Publisher<icart_msg::ClusterInfoArray>::SharedPtr cluster_info_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr is_lost_target_publisher_;
 };
 
 #endif // LEG_CLUSTER_TRACKING_HPP

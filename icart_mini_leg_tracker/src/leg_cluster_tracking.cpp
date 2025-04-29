@@ -24,6 +24,7 @@ LegClusterTracking::LegClusterTracking() :
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
     person_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/person_marker", 10);
     cluster_info_publisher_ = this->create_publisher<icart_msg::ClusterInfoArray>("/leg_tracker/cluster_infos", 10);
+    is_lost_target_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/leg_tracker/is_lost_target", 10);
 
     RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
 }
@@ -549,8 +550,11 @@ void LegClusterTracking::updateTrackingState(int target_id, int second_id) {
 
 void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
     // 【1】最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
+    std_msgs::msg::Bool is_lost_target;
+    is_lost_target.data = true;
     if (cluster_centers.empty()) {
         publishCmdVel(0.0, 0.0);  // 停止指令を送信
+        is_lost_target_publisher_->publish(is_lost_target);
         return;
     }
     geometry_msgs::msg::Point target_pos;
@@ -559,6 +563,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         if (target_id == -1) {
             RCLCPP_WARN(this->get_logger(), "初期追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
+            is_lost_target_publisher_->publish(is_lost_target);
             return;
         }
 
@@ -582,6 +587,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         } else {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
+            is_lost_target_publisher_->publish(is_lost_target);
             return;
         }
     }
@@ -609,6 +615,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
     publishCmdVel(distance_to_target, angle_to_target);
+    is_lost_target.data = false;
+    is_lost_target_publisher_->publish(is_lost_target);
 
     csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
 }
