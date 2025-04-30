@@ -667,11 +667,12 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     // 現在の誤差を計算
     double error_dist = target_distance - STOP_DISTANCE_THRESHOLD;
     double error_angle = target_angle; // radian
-    // 誤差の積分項を更新
+    // 誤差の積分項を更新（上限制限付き）
     integral_dist += error_dist;
+    integral_dist = std::clamp(integral_dist, -MAX_DIST_INTEGRAL, MAX_DIST_INTEGRAL);
     integral_angle += error_angle;
-    RCLCPP_INFO(this->get_logger(), "誤差距離: %.2f, 誤差角度: %.2f", error_dist, error_angle);
-    // TODO: integral_dist, angleの上限値を決める
+    integral_angle = std::clamp(integral_angle, -MAX_ANGLE_INTEGRAL, MAX_ANGLE_INTEGRAL);
+    RCLCPP_INFO(this->get_logger(), "誤差距離: %.2f, 誤差角度: %.2f", integral_dist, integral_angle);
     // PID計算
     double linear_velocity = (KP_DIST * error_dist) + (KI_DIST * integral_dist);
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
