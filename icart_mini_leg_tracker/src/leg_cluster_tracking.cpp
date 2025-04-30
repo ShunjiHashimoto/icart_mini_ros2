@@ -283,14 +283,14 @@ bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg
         const auto &center = it->second;
         // 正面0.6m以内かつ左右0.2m以内のクラスタのみ採用
         if (!(center.x > 0 && center.x < 1.0 && fabs(center.y) < 0.4)) {
-            std::cout << "クラスタID " << it->first << " は有効領域外のため除外" << std::endl;
+            RCLCPP_INFO(this->get_logger(), "クラスタID %d は有効領域外のため除外", it->first);
             it = cluster_centers.erase(it);  // 条件を満たさないクラスタを削除
         } else {
             ++it;
         }
     }
     if(cluster_centers.empty()) {
-        std::cout << "有効なクラスタが見つかりませんでした" << std::endl;
+        RCLCPP_INFO(this->get_logger(), "有効なクラスタが見つかりませんでした");
         return false;
     }
     else{
