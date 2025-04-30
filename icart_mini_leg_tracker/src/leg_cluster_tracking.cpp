@@ -471,17 +471,17 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
         target_id = previous_target_id_;
         target_pos = prev_pos;
         movement = sqrt(pow(target_pos.x - prev_pos.x, 2) + pow(target_pos.y - prev_pos.y, 2));
-        RCLCPP_INFO(this->get_logger(), "前回の追従対象1 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
+        // RCLCPP_INFO(this->get_logger(), "前回の追従対象1 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
         return true;
     } else if (previous_second_id_ != -1 && cluster_centers.count(previous_second_id_)) {
         target_pos = cluster_centers.at(previous_second_id_);
         target_id = previous_second_id_;
         geometry_msgs::msg::Point prev_pos = cluster_centers.at(target_id);
         movement = sqrt(pow(prev_pos.x - target_pos.x, 2) + pow(prev_pos.y - target_pos.y, 2));
-        RCLCPP_INFO(this->get_logger(), "前回の追従対象2 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
+        // RCLCPP_INFO(this->get_logger(), "前回の追従対象2 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
         return true;
     }
-    RCLCPP_INFO(this->get_logger(), "前回の追従対象（ID: %d）をロスト", target_id);
+    // RCLCPP_INFO(this->get_logger(), "前回の追従対象（ID: %d）をロスト", target_id);
     movement = 0.0;
     return false;
 }
@@ -573,7 +573,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         is_target_initialized_ = true;
         previous_target_id_ = target_id;
         previous_second_id_ = -1;
-        RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
+        // RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
         return;
     }
 
@@ -583,11 +583,11 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
-        RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
+        // RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
         if (auto new_target = selectNewTarget(cluster_centers, target_pos, previous_target_found)) {
             target_id = new_target->first;
             target_pos = new_target->second;
-            RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
+            // RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
         } else {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
@@ -607,9 +607,9 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         target_pos.x = (target_pos.x + second_target->second.x) / 2.0;
         target_pos.y = (target_pos.y + second_target->second.y) / 2.0;
         second_id = second_target->first;
-        RCLCPP_INFO(this->get_logger(), "2つのクラスタを選択: ID %d と ID %d", target_id, second_id);
+        // RCLCPP_INFO(this->get_logger(), "2つのクラスタを選択: ID %d と ID %d", target_id, second_id);
     } else {
-        RCLCPP_INFO(this->get_logger(), "単独クラスタを追従: ID %d", target_id);
+        // RCLCPP_INFO(this->get_logger(), "単独クラスタを追従: ID %d", target_id);
     }
 
     // 【5】追従対象を更新
@@ -620,7 +620,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     double angle_to_target = atan2(target_pos.y, target_pos.x);
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
-    RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
+    // RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
     publishCmdVel(distance_to_target, angle_to_target);
     is_lost_target.data = false;
     is_lost_target_publisher_->publish(is_lost_target);
@@ -654,7 +654,7 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     }
     // 31cm以内なら停止
     if (target_distance <= STOP_DISTANCE_THRESHOLD) {
-        RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");
+        // RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");
         cmd_vel_publisher_->publish(cmd_msg); // 速度0を送信
         return;
     }
