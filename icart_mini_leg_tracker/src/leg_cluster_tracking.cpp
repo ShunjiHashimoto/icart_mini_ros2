@@ -547,8 +547,8 @@ LegClusterTracking::findSecondaryCluster(const std::map<int, geometry_msgs::msg:
 void LegClusterTracking::updateTrackingState(int target_id, int second_id) {
     previous_target_id_ = target_id;
     previous_second_id_ = second_id;
-    this->current_target_id_ = target_id;
-    this->current_second_id_ = second_id;
+    current_target_id_ = target_id;
+    current_second_id_ = second_id;
 }
 
 void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
@@ -592,8 +592,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
             is_lost_target_publisher_->publish(is_lost_target);
-            current_target_id_ = -1;
-            current_second_id_ = -1;
+            this->current_target_id_ = -1;
+            this->current_second_id_ = -1;
             csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
             return;
         }
