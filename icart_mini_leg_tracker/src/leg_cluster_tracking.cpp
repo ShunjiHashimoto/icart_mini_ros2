@@ -641,6 +641,8 @@ void LegClusterTracking::resetFollowTarget() {
     cluster_velocity_history_.clear();
     cluster_static_frame_count_.clear();
     next_cluster_id_ = 1;
+    integral_dist = 0.0;
+    integral_angle = 0.0;
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
@@ -665,6 +667,8 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     // 誤差の積分項を更新
     integral_dist += error_dist;
     integral_angle += error_angle;
+    RCLCPP_INFO(this->get_logger(), "誤差距離: %.2f, 誤差角度: %.2f", error_dist, error_angle);
+    // TODO: integral_dist, angleの上限値を決める
     // PID計算
     double linear_velocity = (KP_DIST * error_dist) + (KI_DIST * integral_dist);
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
