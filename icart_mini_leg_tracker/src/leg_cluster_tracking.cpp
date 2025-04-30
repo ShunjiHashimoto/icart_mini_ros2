@@ -489,7 +489,7 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
 std::optional<std::pair<int, geometry_msgs::msg::Point>> 
 LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
                                     const geometry_msgs::msg::Point &previous_target_pos, 
-                                    bool previous_target_found) { // 前回の対象が見つからなかった場合
+                                    bool previous_target_found) { // 前回の追従対象が見つからなかったが、前回の追従対象の位置はわかる
     double min_movement = std::numeric_limits<double>::max();  // 前回の対象との移動距離
     double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
     int new_target_id = -1;
@@ -498,19 +498,22 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
     for (const auto &[current_id, current_center] : cluster_centers) {
         double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);  // ロボットとの距離
         double movement_from_prev = std::numeric_limits<double>::max();  // 初期化
-
-        if (previous_target_found) {
-            movement_from_prev = sqrt(pow(current_center.x - previous_target_pos.x, 2) + 
-                                      pow(current_center.y - previous_target_pos.y, 2));
-        }
+        
+        // 前回の対象が見つかっている場合、移動距離を計算
+        // TODO: 前回の対象が見つからなかった場合は、前回の対象の位置をもとにもっともらしい対象を選ぶ
+        movement_from_prev = sqrt(pow(current_center.x - previous_target_pos.x, 2) + 
+                                  pow(current_center.y - previous_target_pos.y, 2));
 
         // 【優先度】 (1) できるだけ前回の対象に近い → (2) ロボットから近い
+        // 前回の対象が見つからなかった場合、または、移動距離がしきい値以下の場合
         if (!previous_target_found || movement_from_prev < MOVEMENT_THRESHOLD) {  
+            // より前回の位置に近いクラスタを記録
             if (movement_from_prev < min_movement) {
                 min_movement = movement_from_prev;
                 new_target_id = current_id;
                 new_target_pos = current_center;
             }
+        // 前回の対象が遠く離れていた場合、ロボットに近いものを代わりに選ぶ
         } else if (new_target_id == -1 || dist < min_distance) {
             min_distance = dist;
             new_target_id = current_id;
