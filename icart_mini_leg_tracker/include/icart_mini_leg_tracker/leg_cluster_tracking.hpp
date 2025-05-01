@@ -99,13 +99,12 @@ private:
     bool verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement);
     std::optional<std::pair<int, geometry_msgs::msg::Point>> selectNewTarget(
         const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
-        const geometry_msgs::msg::Point &previous_target_pos, 
         bool previous_target_found);
     std::optional<std::pair<int, geometry_msgs::msg::Point>> findSecondaryCluster(
         const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
         int primary_target_id, 
         const geometry_msgs::msg::Point &primary_target_pos);
-    void updateTrackingState(int target_id, int second_id);
+    void updateTrackingState(int target_id, int second_id, geometry_msgs::msg::Point target_pos);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     void resetFollowTarget();
 
@@ -137,6 +136,7 @@ private:
 
     int target_id = -1;
     int previous_target_id_;
+    geometry_msgs::msg::Point previous_target_pos_;
     int previous_second_id_;
     bool is_target_initialized_;
     bool stop_by_joystick_;

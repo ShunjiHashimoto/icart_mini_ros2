@@ -359,6 +359,7 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
                 double delta_time = (this->get_clock()->now() - previous_time_).seconds();
                 predicted_center.x += velocity.x * delta_time * PREDICTED_VEL_GAIN;
                 predicted_center.y += velocity.y * delta_time * PREDICTED_VEL_GAIN;
+                // RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 差分xy: (%.2f, %.2f), 予測位置: (%.2f, %.2f)", prev_id, velocity.x*delta_time*PREDICTED_VEL_GAIN, velocity.y*delta_time*PREDICTED_VEL_GAIN, predicted_center.x, predicted_center.y);
             }
             double dist = calculateDistance(current_center, predicted_center);
             
@@ -367,6 +368,7 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
                 matched_id = prev_id;
             }
         }
+        RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
 
         // ここでロストクラスタと前回のクラスタの両方を比較し、最適なものを採用
         if (temp_cluster_mapping_.count(current_id) > 0) {
@@ -374,6 +376,7 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
             double lost_dist = calculateDistance(current_center, lost_clusters_[lost_matched_id].first);
             if (matched_id == -1 || lost_dist < min_distance) {
                 matched_id = lost_matched_id;  // ロストクラスタのIDを採用
+                RCLCPP_INFO(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
             }
         }
 
@@ -501,8 +504,10 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
         
         // 前回の対象が見つかっている場合、移動距離を計算
         // TODO: 前回の対象が見つからなかった場合は、前回の対象の位置をもとにもっともらしい対象を選ぶ
-        movement_from_prev = sqrt(pow(current_center.x - previous_target_pos.x, 2) + 
-                                  pow(current_center.y - previous_target_pos.y, 2));
+        movement_from_prev = sqrt(pow(current_center.x - previous_target_pos_.x, 2) + 
+                                  pow(current_center.y - previous_target_pos_.y, 2));
+        RCLCPP_INFO(this->get_logger(), "計算対象のクラスタID: %d, 中心座標: (%.2f, %.2f), 前回の追従対象の座標: (%.2f, %.2f)", current_id, current_center.x, current_center.y, previous_target_pos_.x, previous_target_pos_.y);
+        RCLCPP_INFO(this->get_logger(), "前回の対象との移動距離: %.3f, 計算対象のid: %d, 追従対象のid: %d", movement_from_prev, current_id, target_id);
 
         // 【優先度】 (1) できるだけ前回の対象に近い → (2) ロボットから近い
         // 前回の対象が見つからなかった場合、または、移動距離がしきい値以下の場合
@@ -547,11 +552,12 @@ LegClusterTracking::findSecondaryCluster(const std::map<int, geometry_msgs::msg:
     return std::nullopt;  // 近くに適切なクラスタなし
 }
 
-void LegClusterTracking::updateTrackingState(int target_id, int second_id) {
+void LegClusterTracking::updateTrackingState(int target_id, int second_id, geometry_msgs::msg::Point target_pos) {
     previous_target_id_ = target_id;
     previous_second_id_ = second_id;
     current_target_id_ = target_id;
     current_second_id_ = second_id;
+    previous_target_pos_ = target_pos;
 }
 
 void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
@@ -586,11 +592,11 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
-        // RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
-        if (auto new_target = selectNewTarget(cluster_centers, target_pos, previous_target_found)) {
+        RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
+        if (auto new_target = selectNewTarget(cluster_centers, previous_target_found)) {
             target_id = new_target->first;
             target_pos = new_target->second;
-            // RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
+            RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
         } else {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
             publishCmdVel(0.0, 0.0);
@@ -616,7 +622,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     }
 
     // 【5】追従対象を更新
-    updateTrackingState(target_id, second_id);
+    updateTrackingState(target_id, second_id, target_pos);
     publishPersonMarker(target_pos);
 
     // 【6】目標地点への移動指令
@@ -646,6 +652,7 @@ void LegClusterTracking::resetFollowTarget() {
     next_cluster_id_ = 1;
     integral_dist = 0.0;
     integral_angle = 0.0;
+    previous_target_pos_ =  geometry_msgs::msg::Point();
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
@@ -672,7 +679,7 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     integral_dist = std::clamp(integral_dist, -MAX_DIST_INTEGRAL, MAX_DIST_INTEGRAL);
     integral_angle += error_angle;
     integral_angle = std::clamp(integral_angle, -MAX_ANGLE_INTEGRAL, MAX_ANGLE_INTEGRAL);
-    RCLCPP_INFO(this->get_logger(), "誤差距離: %.2f, 誤差角度: %.2f", integral_dist, integral_angle);
+    // RCLCPP_INFO(this->get_logger(), "誤差距離: %.2f, 誤差角度: %.2f", integral_dist, integral_angle);
     // PID計算
     double linear_velocity = (KP_DIST * error_dist) + (KI_DIST * integral_dist);
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
