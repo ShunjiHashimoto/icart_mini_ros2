@@ -491,7 +491,6 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
 
 std::optional<std::pair<int, geometry_msgs::msg::Point>> 
 LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
-                                    const geometry_msgs::msg::Point &previous_target_pos, 
                                     bool previous_target_found) { // 前回の追従対象が見つからなかったが、前回の追従対象の位置はわかる
     double min_movement = std::numeric_limits<double>::max();  // 前回の対象との移動距離
     double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
