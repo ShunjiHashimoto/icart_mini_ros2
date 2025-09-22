@@ -610,6 +610,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
+        publishCmdVel(0.0, 0.0);
         RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
         if (auto new_target = selectNewTarget(cluster_centers, previous_target_found)) {
             target_id = new_target->first;
