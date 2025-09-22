@@ -529,6 +529,13 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
     double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
     int new_target_id = -1;
     geometry_msgs::msg::Point new_target_pos;
+    bool selected_by_previous = false;
+    bool selected_by_distance = false;
+    double selected_movement = std::numeric_limits<double>::max();
+    double selected_distance = std::numeric_limits<double>::max();
+
+    RCLCPP_INFO(this->get_logger(), "selectNewTarget開始: previous_target_found=%s, cluster_count=%zu",
+                previous_target_found ? "true" : "false", cluster_centers.size());
 
     for (const auto &[current_id, current_center] : cluster_centers) {
         double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);  // ロボットとの距離
@@ -549,17 +556,35 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
                 min_movement = movement_from_prev;
                 new_target_id = current_id;
                 new_target_pos = current_center;
+                selected_by_previous = true;
+                selected_by_distance = false;
+                selected_movement = movement_from_prev;
             }
         // 前回の対象が遠く離れていた場合、ロボットに近いものを代わりに選ぶ
         } else if (new_target_id == -1 || dist < min_distance) {
             min_distance = dist;
             new_target_id = current_id;
             new_target_pos = current_center;
+            selected_by_previous = false;
+            selected_by_distance = true;
+            selected_distance = dist;
         }
     }
 
     if (new_target_id == -1) {
+        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: 候補が見つかりませんでした");
         return std::nullopt;  // 追従対象なし
+    }
+
+    double dist_to_robot = sqrt(new_target_pos.x * new_target_pos.x + new_target_pos.y * new_target_pos.y);
+    if (selected_by_previous && !selected_by_distance) {
+        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d を前回位置優先で選択 (移動距離: %.3f, ロボット距離: %.3f)",
+                    new_target_id, selected_movement, dist_to_robot);
+    } else if (selected_by_distance) {
+        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d をロボットとの距離優先で選択 (距離: %.3f)",
+                    new_target_id, selected_distance);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d を選択", new_target_id);
     }
 
     return std::make_pair(new_target_id, new_target_pos);
