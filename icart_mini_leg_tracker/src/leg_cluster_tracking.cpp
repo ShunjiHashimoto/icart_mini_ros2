@@ -488,17 +488,17 @@ int LegClusterTracking::initializeTarget(const std::map<int, geometry_msgs::msg:
 // 追従対象がまだ存在しているか確認する関数
 bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement) {
     if (previous_target_id_ != -1 && cluster_centers.count(previous_target_id_)) {
-        geometry_msgs::msg::Point prev_pos = cluster_centers.at(previous_target_id_);
+        geometry_msgs::msg::Point current_pos = cluster_centers.at(previous_target_id_);
         target_id = previous_target_id_;
-        target_pos = prev_pos;
-        movement = sqrt(pow(target_pos.x - prev_pos.x, 2) + pow(target_pos.y - prev_pos.y, 2));
+        target_pos = current_pos;
+        movement = calculateDistance(current_pos, previous_target_pos_);
         // RCLCPP_INFO(this->get_logger(), "前回の追従対象1 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
         return true;
     } else if (previous_second_id_ != -1 && cluster_centers.count(previous_second_id_)) {
-        target_pos = cluster_centers.at(previous_second_id_);
+        geometry_msgs::msg::Point current_pos = cluster_centers.at(previous_second_id_);
+        target_pos = current_pos;
         target_id = previous_second_id_;
-        geometry_msgs::msg::Point prev_pos = cluster_centers.at(target_id);
-        movement = sqrt(pow(prev_pos.x - target_pos.x, 2) + pow(prev_pos.y - target_pos.y, 2));
+        movement = calculateDistance(current_pos, previous_target_pos_);
         // RCLCPP_INFO(this->get_logger(), "前回の追従対象2 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
         return true;
     }
@@ -599,6 +599,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         is_target_initialized_ = true;
         previous_target_id_ = target_id;
         previous_second_id_ = -1;
+        previous_target_pos_ = target_pos;
         // RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
         return;
     }
