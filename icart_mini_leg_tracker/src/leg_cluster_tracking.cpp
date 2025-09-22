@@ -707,7 +707,7 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
     RCLCPP_INFO(this->get_logger(), "直進速度: %.2f, 回転速度: %.2f", linear_velocity, angular_velocity);
     // if(abs(error_angle) > M_PI/4) { // BLDC
-    if(abs(error_angle) > M_PI/3) { // icart
+    if(abs(error_angle) > M_PI/4) { // icart
         cmd_msg.linear.x = 0.0; //　対象との角度が大きい場合は旋回を優先する
         cmd_msg.angular.z = (cmd_msg.angular.z > 0) ? MAX_TURN_SPEED : -MAX_TURN_SPEED;
     }
