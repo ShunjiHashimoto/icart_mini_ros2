@@ -42,16 +42,19 @@
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
 
 // 速度制限
-#define MAX_SPEED 2.0
+// #define MAX_SPEED 2.0 // BLDC用
+#define MAX_SPEED 0.25 // icart用
 #define MIN_SPEED 0.05
-#define MAX_TURN_SPEED M_PI 
+// #define MAX_TURN_SPEED M_PI  // BLDC用
+#define MAX_TURN_SPEED M_PI/4 // icart用
 #define PREDICTED_VEL_GAIN 0.1
 #define LOST_PREDICTED_VEL_GAIN 0.05
 
 // PID制御用のゲイン
 #define KP_DIST  0.5
 #define KI_DIST 0.01
-#define KP_ANGLE 4.0 
+// #define KP_ANGLE 4.0 // BLDC用
+#define KP_ANGLE 1.0 // icart用
 #define KI_ANGLE 0.001
 #define MAX_DIST_INTEGRAL 10.0
 #define MAX_ANGLE_INTEGRAL M_PI

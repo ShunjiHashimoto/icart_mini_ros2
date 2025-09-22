@@ -685,7 +685,8 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     cmd_msg.linear.x = std::clamp(linear_velocity, MIN_SPEED, MAX_SPEED);
     cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
     RCLCPP_INFO(this->get_logger(), "直進速度: %.2f, 回転速度: %.2f", linear_velocity, angular_velocity);
-    if(abs(error_angle) > M_PI/4) {
+    // if(abs(error_angle) > M_PI/4) { // BLDC
+    if(abs(error_angle) > M_PI/3) { // icart
         cmd_msg.linear.x = 0.0; //　対象との角度が大きい場合は旋回を優先する
         cmd_msg.angular.z = (cmd_msg.angular.z > 0) ? MAX_TURN_SPEED : -MAX_TURN_SPEED;
     }
@@ -742,16 +743,28 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     std::string ns = "person_marker";
     int marker_id = 999;
 
+    // BLDC
+    // visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
+    //     ns, marker_id++, visualization_msgs::msg::Marker::CYLINDER,
+    //     target_pos, 0.1, 0.1, -0.3, -1, 0.0, 1.0, 0.0, 0.5);
+    // body_marker.pose.position.z -= 0.15;
+    // icart
     visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::CYLINDER,
-        target_pos, 0.1, 0.1, -0.3, -1, 0.0, 1.0, 0.0, 0.5);
-    body_marker.pose.position.z -= 0.15;
+        target_pos, 0.1, 0.1, 0.3, -1, 0.0, 1.0, 0.0, 0.5);
+    body_marker.pose.position.z += 0.15;
     markers.markers.push_back(body_marker);
 
+    // BLDC
+    // visualization_msgs::msg::Marker head_marker = marker_helper_->createMarker(
+    //     ns, marker_id++, visualization_msgs::msg::Marker::SPHERE,
+    //     target_pos, 0.1, 0.1, -0.1, -1, 0.0, 1.0, 0.0, 0.5);
+    // head_marker.pose.position.z -= 0.35;
+    // icart
     visualization_msgs::msg::Marker head_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::SPHERE,
-        target_pos, 0.1, 0.1, -0.1, -1, 0.0, 1.0, 0.0, 0.5);
-    head_marker.pose.position.z -= 0.35;
+        target_pos, 0.1, 0.1, 0.1, -1, 0.0, 1.0, 0.0, 0.5);
+    head_marker.pose.position.z += 0.35;
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);
