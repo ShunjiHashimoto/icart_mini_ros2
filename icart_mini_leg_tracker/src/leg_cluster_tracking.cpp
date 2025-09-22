@@ -365,6 +365,7 @@ void LegClusterTracking::matchPreviousClusters(
         if (cluster_id_mapping_.count(current_id) > 0) continue;  // すでにマッチ済み
 
         double min_distance = std::numeric_limits<double>::max();
+        double nearest_distance = std::numeric_limits<double>::max();
         int matched_id = -1;
 
         for (const auto &[prev_id, prev_info] : previous_cluster_info_map_) {
@@ -377,13 +378,15 @@ void LegClusterTracking::matchPreviousClusters(
                 // RCLCPP_INFO(this->get_logger(), "クラスタID: %d | 差分xy: (%.2f, %.2f), 予測位置: (%.2f, %.2f)", prev_id, velocity.x*delta_time*PREDICTED_VEL_GAIN, velocity.y*delta_time*PREDICTED_VEL_GAIN, predicted_center.x, predicted_center.y);
             }
             double dist = calculateDistance(current_center, predicted_center);
-            
+            if (dist < nearest_distance) {
+                nearest_distance = dist;
+            }
+
             if (dist < CLUSTER_MATCHED_THRESH && dist < min_distance) {
                 min_distance = dist;
                 matched_id = prev_id;
             }
         }
-        RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
 
         // ここでロストクラスタと前回のクラスタの両方を比較し、最適なものを採用
         if (temp_cluster_mapping_.count(current_id) > 0) {
@@ -393,9 +396,20 @@ void LegClusterTracking::matchPreviousClusters(
                 double lost_dist = calculateDistance(current_center, recovered_it->second);
                 if (matched_id == -1 || lost_dist < min_distance) {
                     matched_id = lost_matched_id;  // ロストクラスタのIDを採用
+                    min_distance = lost_dist;
                     RCLCPP_INFO(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
                 }
             }
+        }
+
+        if (matched_id == -1) {
+            if (nearest_distance == std::numeric_limits<double>::max()) {
+                RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: N/A", current_id, matched_id);
+            } else {
+                RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f (未マッチ)", current_id, matched_id, nearest_distance);
+            }
+        } else {
+            RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
         }
 
         // マッチしたクラスタIDをマッピング、なければ新規付与
