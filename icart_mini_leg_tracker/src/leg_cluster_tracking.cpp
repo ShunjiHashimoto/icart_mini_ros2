@@ -47,6 +47,7 @@ void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
     else if (msg->buttons[FOLLOWME_STOP_BUTTON] == 1) {
         start_followme_flag = false;
         resetFollowTarget();
+        publishCmdVel(0.0, 0.0);
         RCLCPP_WARN(this->get_logger(), "追従停止");
     }
 }
