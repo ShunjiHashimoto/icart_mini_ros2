@@ -90,8 +90,15 @@ private:
 
     // トラッキング関連
     void trackClusters(std::map<int, geometry_msgs::msg::Point> &current_centers);
-    void matchLostClusters(std::map<int, geometry_msgs::msg::Point> &current_centers, std::map<int, int> &temp_cluster_mapping_);
-    void matchPreviousClusters(std::map<int, geometry_msgs::msg::Point> &current_centers, std::map<int, int> &temp_cluster_mapping_, std::map<int, bool> &matched_previous);
+    void matchLostClusters(
+        std::map<int, geometry_msgs::msg::Point> &current_centers,
+        std::map<int, int> &temp_cluster_mapping_,
+        std::map<int, geometry_msgs::msg::Point> &recovered_lost_centers);
+    void matchPreviousClusters(
+        std::map<int, geometry_msgs::msg::Point> &current_centers,
+        std::map<int, int> &temp_cluster_mapping_,
+        std::map<int, bool> &matched_previous,
+        const std::map<int, geometry_msgs::msg::Point> &recovered_lost_centers);
     void storeLostClusters(std::map<int, bool> &matched_previous);
     void calculateClusterVelocities(
         const std::map<int, geometry_msgs::msg::Point> &current_centers, 

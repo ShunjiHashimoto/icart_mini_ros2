@@ -298,10 +298,15 @@ bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg
     }
 }
 
-void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Point> &current_centers, std::map<int, int> &temp_cluster_mapping_) {
+void LegClusterTracking::matchLostClusters(
+    std::map<int, geometry_msgs::msg::Point> &current_centers,
+    std::map<int, int> &temp_cluster_mapping_,
+    std::map<int, geometry_msgs::msg::Point> &recovered_lost_centers) {
     for (auto &[current_id, current_center] : current_centers) {
         double min_distance = std::numeric_limits<double>::max();
         int matched_id = -1;
+        geometry_msgs::msg::Point best_predicted_center{};
+        bool has_prediction = false;
 
         for (auto it = lost_clusters_.begin(); it != lost_clusters_.end();) {
             int lost_id = it->first;
@@ -331,12 +336,17 @@ void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Poi
             if (dist < CLUSTER_LOST_MATCHED_THRESH && dist < min_distance) {
                 min_distance = dist;
                 matched_id = lost_id;
+                best_predicted_center = predicted_center;
+                has_prediction = true;
             }
             ++it;
         }
 
         if (matched_id != -1) {
             temp_cluster_mapping_[current_id] = matched_id;
+            if (has_prediction) {
+                recovered_lost_centers[matched_id] = best_predicted_center;
+            }
             lost_clusters_.erase(matched_id);
             lost_cluster_velocities_.erase(matched_id);
             // std::cout << "失われたクラスタID " << matched_id << " が復活" << std::endl;
@@ -345,7 +355,11 @@ void LegClusterTracking::matchLostClusters(std::map<int, geometry_msgs::msg::Poi
 }
 
 // 前回のクラスタとマッチングを試みる関数
-void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg::Point> &current_centers, std::map<int, int> &temp_cluster_mapping_, std::map<int, bool> &matched_previous) {
+void LegClusterTracking::matchPreviousClusters(
+    std::map<int, geometry_msgs::msg::Point> &current_centers,
+    std::map<int, int> &temp_cluster_mapping_,
+    std::map<int, bool> &matched_previous,
+    const std::map<int, geometry_msgs::msg::Point> &recovered_lost_centers) {
     for (auto &[current_id, current_center] : current_centers) {
         if (cluster_id_mapping_.count(current_id) > 0) continue;  // すでにマッチ済み
 
@@ -373,10 +387,13 @@ void LegClusterTracking::matchPreviousClusters(std::map<int, geometry_msgs::msg:
         // ここでロストクラスタと前回のクラスタの両方を比較し、最適なものを採用
         if (temp_cluster_mapping_.count(current_id) > 0) {
             int lost_matched_id = temp_cluster_mapping_[current_id];
-            double lost_dist = calculateDistance(current_center, lost_clusters_[lost_matched_id].first);
-            if (matched_id == -1 || lost_dist < min_distance) {
-                matched_id = lost_matched_id;  // ロストクラスタのIDを採用
-                RCLCPP_INFO(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
+            auto recovered_it = recovered_lost_centers.find(lost_matched_id);
+            if (recovered_it != recovered_lost_centers.end()) {
+                double lost_dist = calculateDistance(current_center, recovered_it->second);
+                if (matched_id == -1 || lost_dist < min_distance) {
+                    matched_id = lost_matched_id;  // ロストクラスタのIDを採用
+                    RCLCPP_INFO(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
+                }
             }
         }
 
@@ -411,6 +428,7 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
     cluster_id_mapping_.clear();
     std::map<int, bool> matched_previous;
     std::map<int, int> temp_cluster_mapping_;  // 仮のクラスタマッピング（ロストクラスタ用）
+    std::map<int, geometry_msgs::msg::Point> recovered_lost_centers;
 
     if (previous_cluster_info_map_.empty()) {
         // 初期化として current_centers の ID に対する ClusterInfo を作って保存
@@ -430,10 +448,10 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
     }
 
     // 【1】失われたクラスタとマッチングを試みる
-    matchLostClusters(current_centers, temp_cluster_mapping_);
+    matchLostClusters(current_centers, temp_cluster_mapping_, recovered_lost_centers);
 
     // 【2】前回のクラスタと比較して最も近いクラスタを探す, ロストクラスタのほうが近い場合はそちらを採用
-    matchPreviousClusters(current_centers, temp_cluster_mapping_, matched_previous);
+    matchPreviousClusters(current_centers, temp_cluster_mapping_, matched_previous, recovered_lost_centers);
 
     // 【3】マッチしなかったクラスタを"失われたクラスタ"として保存
     storeLostClusters(matched_previous);
