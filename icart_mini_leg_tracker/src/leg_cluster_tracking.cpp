@@ -375,6 +375,10 @@ void LegClusterTracking::matchPreviousClusters(
         int matched_id = -1;
 
         for (const auto &[prev_id, prev_info] : previous_cluster_info_map_) {
+            auto matched_it = matched_previous.find(prev_id);
+            if (matched_it != matched_previous.end() && matched_it->second) {
+                continue;  // この prev_id は既に別クラスタに割り当て済み
+            }
             geometry_msgs::msg::Point predicted_center = prev_info.center;
             if (cluster_info_map_.count(prev_id) > 0) {
                 const auto &velocity = cluster_info_map_[prev_id].velocity;
