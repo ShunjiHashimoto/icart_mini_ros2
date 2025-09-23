@@ -37,7 +37,7 @@
 #define CLUSTER_TOLERANCE 0.05 // ?m以内の点を同じクラスタにする[m]
 #define LOST_CLUSTER_TIMEOUT 1.0 // 失われたクラスタのタイムアウト[s]
 #define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
-#define STOP_DISTANCE_THRESHOLD 0.3 //[m]
+#define STOP_DISTANCE_THRESHOLD 0.35 //[m]
 #define MAX_CLUSTER_DISTANCE 2.5 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
 #define STATIC_SPEED_THRESHOLD 0.1 // 静止状態と判定するしきい値[m/s]
@@ -48,7 +48,7 @@
 #define MAX_SPEED 0.25 // icart用
 #define MIN_SPEED 0.05
 // #define MAX_TURN_SPEED M_PI  // BLDC用
-#define MAX_TURN_SPEED M_PI/3 // icart用
+#define MAX_TURN_SPEED M_PI/2 // icart用
 #define PREDICTED_VEL_GAIN 0.1
 #define LOST_PREDICTED_VEL_GAIN 0.05
 
