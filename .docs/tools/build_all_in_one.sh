@@ -5,14 +5,10 @@ set -euo pipefail
 # Output: All-in-One.md (repo root)
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-OUT_FILE="$ROOT_DIR/All-in-One.md"
+OUT_FILE="$ROOT_DIR/Wiki.md"
 
 declare -a ORDER=(
   "Year-In-Review.md:Year-In-Review"
-  "Architecture.md:Architecture"
-  "Setup.md:Setup"
-  "Leg-Tracker.md:Leg-Tracker"
-  "YPSpur-Bridge.md:YPSpur-Bridge"
   "Roadmap.md:Roadmap"
   "Changelog.md:Changelog"
 )
@@ -21,9 +17,6 @@ WIKI_DIR="$ROOT_DIR/.docs/wiki"
 
 {
   echo "# icart_mini_ros2 — All-in-One Wiki"
-  echo
-  echo "> このファイルは .docs/wiki/*.md を結合して自動生成しています。"
-  echo "> 画像参照はリポジトリルート基準（.docs/imgs/）です。"
   echo
   echo "## Table of Contents"
   for item in "${ORDER[@]}"; do
@@ -50,4 +43,3 @@ WIKI_DIR="$ROOT_DIR/.docs/wiki"
 } > "$OUT_FILE"
 
 echo "Generated: $OUT_FILE"
-

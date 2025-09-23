@@ -1,14 +1,13 @@
 # icart_mini_ros2 Wiki
 
-ようこそ！このWikiは i-Cart mini の ROS 2 対応一式（Bringup、URDF/表示、YP-Spur ブリッジ、LiDAR 脚クラスタ追跡）の技術概要と、1年間の活動成果をまとめたポータルです。
+ようこそ！このWikiは i-Cart mini の ROS 2 プロジェクトの1年間の活動成果、今後の計画、変更履歴をまとめたポータルです。
 
 - プロジェクト概要と成果: Year-In-Review.md
-- システム/構成: Architecture.md
-- 環境構築と起動: Setup.md
-- 脚クラスタ追跡（Follow-me）: Leg-Tracker.md
-- 走行コントロール橋渡し: YPSpur-Bridge.md
 - 今後の計画と課題: Roadmap.md
 - 更新履歴: Changelog.md
+
+補足
+- アーキテクチャ/セットアップ/Leg-Tracker/YP-Spur Bridge の詳細は README.md を参照してください（重複を避けるためWikiからは省略）。
 
 参考画像
 - .docs/imgs/icart_mini.png
@@ -21,4 +20,3 @@
 関連リポジトリ
 - urg_node2: Hokuyo LiDAR ドライバ
 - i-Cart: i-Cart シリーズのモデル/パラメータ
-
