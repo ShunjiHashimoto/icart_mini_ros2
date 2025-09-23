@@ -37,7 +37,8 @@ WIKI_DIR="$ROOT_DIR/.docs/wiki"
     echo
     echo "## ${anchor}"
     echo
-    cat "$path"
+    sed -e 's#\.\./imgs/#.docs/imgs/#g' \
+        -e 's#\.\./videos/#.docs/videos/#g' "$path"
     echo
   done
 } > "$OUT_FILE"
