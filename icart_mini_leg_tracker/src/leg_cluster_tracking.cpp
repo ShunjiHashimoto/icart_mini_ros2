@@ -566,9 +566,8 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
         RCLCPP_INFO(this->get_logger(), "前回の対象との移動距離: %.3f, 計算対象のid: %d, 追従対象のid: %d", movement_from_prev, current_id, target_id);
 
         // 【優先度】 (1) できるだけ前回の対象に近い → (2) ロボットから近い
-        const bool can_use_previous_reference = previous_target_found && (movement_from_prev < MOVEMENT_THRESHOLD);
-
-        if (can_use_previous_reference) {
+        // 前回の対象が見つからなかった場合、または、移動距離がしきい値以下の場合
+        if (!previous_target_found || movement_from_prev < MOVEMENT_THRESHOLD) {  
             // より前回の位置に近いクラスタを記録
             if (movement_from_prev < min_movement) {
                 min_movement = movement_from_prev;
@@ -578,20 +577,14 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
                 selected_by_distance = false;
                 selected_movement = movement_from_prev;
             }
-        } else {
-            // ロボットに十分近いものだけを新規候補として採用
-            if (dist < MAX_RESELECT_DISTANCE && dist < min_distance) {
-                min_distance = dist;
-                new_target_id = current_id;
-                new_target_pos = current_center;
-                selected_by_previous = false;
-                selected_by_distance = true;
-                selected_distance = dist;
-            } else if (dist >= MAX_RESELECT_DISTANCE) {
-                RCLCPP_DEBUG(this->get_logger(),
-                             "クラスタID: %d はロスト後の距離制限 %.2f m を超過 (%.3f m)",
-                             current_id, MAX_RESELECT_DISTANCE, dist);
-            }
+        // 前回の対象が遠く離れていた場合、ロボットに近いものを代わりに選ぶ
+        } else if (new_target_id == -1 || dist < min_distance) {
+            min_distance = dist;
+            new_target_id = current_id;
+            new_target_pos = current_center;
+            selected_by_previous = false;
+            selected_by_distance = true;
+            selected_distance = dist;
         }
     }
 
