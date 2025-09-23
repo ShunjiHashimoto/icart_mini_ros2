@@ -1,6 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 import os
 
@@ -42,6 +43,14 @@ def generate_launch_description():
             output="screen"
         ),
 
+        # LEDステータスモニタ
+        Node(
+            package="icart_mini_leg_tracker",
+            executable="led_status.py",
+            name="led_status_node",
+            output="screen"
+        ),
+
         # 3秒待って icart_mini_ypspur_bridge を起動
         TimerAction(
             period=3.0,
@@ -53,4 +62,3 @@ def generate_launch_description():
             ]
         )
     ])
-
