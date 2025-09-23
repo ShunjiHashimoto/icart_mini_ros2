@@ -48,7 +48,7 @@
 #define MAX_SPEED 0.25 // icart用
 #define MIN_SPEED 0.05
 // #define MAX_TURN_SPEED M_PI  // BLDC用
-#define MAX_TURN_SPEED M_PI/2 // icart用
+#define MAX_TURN_SPEED M_PI/3 // icart用
 #define PREDICTED_VEL_GAIN 0.1
 #define LOST_PREDICTED_VEL_GAIN 0.05
 
