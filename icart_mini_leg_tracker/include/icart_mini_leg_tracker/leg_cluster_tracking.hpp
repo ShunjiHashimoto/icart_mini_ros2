@@ -133,6 +133,8 @@ private:
     // 移動制御
     void publishCmdVel(double target_distance, double target_angle);
     
+    void publishLostState(bool lost);
+
     // メンバ変数
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_;

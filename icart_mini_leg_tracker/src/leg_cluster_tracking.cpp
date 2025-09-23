@@ -37,6 +37,7 @@ LegClusterTracking::LegClusterTracking() :
     clearLastSelectionInfo();
 
     last_callback_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
+    publishLostState(false);
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -44,21 +45,25 @@ void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
         RCLCPP_WARN(this->get_logger(), "非常停止");
         stop_by_joystick_ = true;
         publishCmdVel(0.0, 0.0);
+        publishLostState(true);
     }
     else if (msg->buttons[UNLOCK_EMERGENCY_BUTTON] == 1) {
         RCLCPP_WARN(this->get_logger(), "非常停止解除");
         stop_by_joystick_ = false;
+        publishLostState(false);
     }
     else if (msg->buttons[FOLLOWME_START_BUTTON] == 1) {
         resetFollowTarget();
         start_followme_flag = true;
         RCLCPP_WARN(this->get_logger(), "追従開始");
+        publishLostState(false);
     }
     else if (msg->buttons[FOLLOWME_STOP_BUTTON] == 1) {
         start_followme_flag = false;
         resetFollowTarget();
         publishCmdVel(0.0, 0.0);
         RCLCPP_WARN(this->get_logger(), "追従停止");
+        publishLostState(true);
     }
 }
 
@@ -942,6 +947,15 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);
+}
+
+void LegClusterTracking::publishLostState(bool lost) {
+    if (!is_lost_target_publisher_) {
+        return;
+    }
+    std_msgs::msg::Bool msg;
+    msg.data = lost;
+    is_lost_target_publisher_->publish(msg);
 }
 
 void LegClusterTracking::publishClusterInfoMap() {
