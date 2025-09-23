@@ -12,7 +12,9 @@ LegClusterTracking::LegClusterTracking() :
     is_target_initialized_(false), 
     stop_by_joystick_(false),
     marker_helper_(std::make_shared<MarkerHelper>(1000)), 
-    csv_logger_(std::make_shared<CSVLogger>(FILENAME))
+    csv_logger_(std::make_shared<CSVLogger>(FILENAME)),
+    accumulated_loop_period_(0.0),
+    loop_sample_count_(0)
     {
 
     lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
@@ -33,6 +35,8 @@ LegClusterTracking::LegClusterTracking() :
     RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
 
     clearLastSelectionInfo();
+
+    last_callback_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -61,7 +65,20 @@ void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
 void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
     if (start_followme_flag == false) return;
     if (stop_by_joystick_ == true) return;
-    auto start_time = this->get_clock()->now();
+    auto current_time = this->get_clock()->now();
+    if (last_callback_time_.nanoseconds() != 0) {
+        double loop_period = (current_time - last_callback_time_).seconds();
+        accumulated_loop_period_ += loop_period;
+        loop_sample_count_++;
+        if (loop_sample_count_ >= LOOP_PERIOD_SAMPLE_WINDOW) {
+            double average_period = accumulated_loop_period_ / static_cast<double>(loop_sample_count_);
+            double frequency = (average_period > 1e-6) ? (1.0 / average_period) : 0.0;
+            RCLCPP_INFO(this->get_logger(), "scanCallback 平均周期: %.3f s (%.1f Hz)", average_period, frequency);
+            accumulated_loop_period_ = 0.0;
+            loop_sample_count_ = 0;
+        }
+    }
+    last_callback_time_ = current_time;
     auto points = generateXYPoints(msg);
     removeNoise(points);
     downSampling(points);
@@ -78,9 +95,6 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
         publishMatchedClusterCenters(cluster_centers);
         publishClusterInfoMap();
     }
-    auto end_time = this->get_clock()->now();
-    auto duration = (end_time - start_time).seconds();  // 経過時間（秒）
-    // RCLCPP_INFO(this->get_logger(), "scanCallback 実行時間: %.6f 秒", duration);
 }
 
 std::vector<geometry_msgs::msg::Point> LegClusterTracking::generateXYPoints(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
@@ -683,6 +697,46 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         if (auto new_target = selectNewTarget(cluster_centers, previous_target_found)) {
             target_id = new_target->first;
             target_pos = new_target->second;
+            if (is_target_initialized_) {
+                double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
+                double new_angle = std::atan2(target_pos.y, target_pos.x);
+                double angle_diff = std::atan2(std::sin(new_angle - previous_angle), std::cos(new_angle - previous_angle));
+                angle_diff = std::fabs(angle_diff);
+                double distance_diff = calculateDistance(previous_target_pos_, target_pos);
+
+                if (distance_diff > LOST_DISTANCE_JUMP && angle_diff > LOST_ANGLE_JUMP) {
+                    RCLCPP_WARN(this->get_logger(),
+                                "selectNewTarget: 新しい候補(ID %d)が前回位置と大きく異なるため停止 (距離: %.3f, 角度差: %.2f)",
+                                target_id, distance_diff, angle_diff);
+
+                    publishCmdVel(0.0, 0.0);
+                    is_lost_target_publisher_->publish(is_lost_target);
+                    current_target_id_ = -1;
+                    current_second_id_ = -1;
+
+                    last_selection_called_ = true;
+                    last_selection_target_id_ = -1;
+                    last_selection_reason_ = "jump_detected";
+                    last_selection_movement_ = distance_diff;
+                    last_selection_distance_to_robot_ = std::hypot(target_pos.x, target_pos.y);
+                    last_selection_timestamp_ = this->now().seconds();
+
+                    csv_logger_->saveClusterData(
+                        cluster_id_history_,
+                        cluster_info_map_,
+                        current_target_id_,
+                        current_second_id_,
+                        last_selection_called_,
+                        last_selection_target_id_,
+                        last_selection_reason_,
+                        last_selection_movement_,
+                        last_selection_distance_to_robot_,
+                        last_selection_timestamp_);
+                    start_followme_flag = false;
+                    resetFollowTarget();
+                    return;
+                }
+            }
             RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
         } else {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
@@ -701,6 +755,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                 last_selection_movement_,
                 last_selection_distance_to_robot_,
                 last_selection_timestamp_);
+            start_followme_flag = false;
+            resetFollowTarget();
             return;
         }
     }

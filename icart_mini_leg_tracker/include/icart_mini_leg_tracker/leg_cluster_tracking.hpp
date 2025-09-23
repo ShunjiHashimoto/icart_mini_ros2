@@ -42,13 +42,16 @@
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
 #define STATIC_SPEED_THRESHOLD 0.1 // 静止状態と判定するしきい値[m/s]
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
+#define LOST_DISTANCE_JUMP 0.4 //大きく離れたとみなす距離変化[m]
+#define LOST_ANGLE_JUMP (M_PI/2.0) // 大きく離れたとみなす角度変化[rad]
+#define LOOP_PERIOD_SAMPLE_WINDOW 50 // 平均周期を算出するフレーム数
 
 // 速度制限
 // #define MAX_SPEED 2.0 // BLDC用
 #define MAX_SPEED 0.25 // icart用
 #define MIN_SPEED 0.05
 // #define MAX_TURN_SPEED M_PI  // BLDC用
-#define MAX_TURN_SPEED M_PI/2 // icart用
+#define MAX_TURN_SPEED M_PI/3 // icart用
 #define PREDICTED_VEL_GAIN 0.1
 #define LOST_PREDICTED_VEL_GAIN 0.05
 
@@ -180,6 +183,11 @@ private:
     rclcpp::Publisher<icart_msg::ClusterInfoArray>::SharedPtr cluster_info_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr is_lost_target_publisher_;
+
+    // 計測
+    rclcpp::Time last_callback_time_;
+    double accumulated_loop_period_;
+    size_t loop_sample_count_;
 };
 
 #endif // LEG_CLUSTER_TRACKING_HPP
