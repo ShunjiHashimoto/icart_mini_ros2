@@ -4,24 +4,24 @@
 
 ## ハイライト
 - ROS 2 Humble でのロボット一式のBringupを確立（Docker化含む）
-- 走行系：YP-Spur と ROS 2 の橋渡しノード実装（/cmd_vel → 走行、/odom・/joint_states・TF）
+- 走行系：YP-Spur と ROS 2 の橋渡しノード実装（`/cmd_vel` → 走行、`/odom`・`/joint_states`・TF）
 - センサ系：Hokuyo UST-10LX を urg_node2 で接続・可視化・デバッグ手順整備
 - 追従系：LiDARベースの脚クラスタ検出・ID追跡・Follow-me 制御の実装（PID）
 - 表示系：URDF（xacro）と RViz 構成を整理、可観測性向上
 - Bringup まとめ起動（センサ/走行/ジョイ操作/追従ノード連携）の launch 化
 
-## システム構成の到達点
-- Bringup: 
-- 表示/URDF: 
-- 走行ブリッジ: 
-- 追従（クラスタ追跡）: 
+## 現状のシステム構成
+- Bringup: `icart_mini_bringup`
+- 表示/URDF: `icart_mini_description`
+- 走行ブリッジ: `icart_mini_ypspur_bridge`
+- 追従（クラスタ追跡）: `icart_mini_leg_tracker`
 - Docker での開発・実行環境整備（ビルドスクリプト、起動スクリプト）
 
 ## 実装済み機能（主要項目）
-- 速度指令  を YP-Spur 経由で走行系に反映
-- 里程計  と （→）の配信
-- ホイール状態  の配信
-- LiDAR  からのクラスタリング（PCL EuclideanClusterExtraction）
+- 速度指令 `/cmd_vel` を YP-Spur 経由で走行系に反映
+- オドメトリ `/odom` と `/tf`（`odom`→`base_footprint`）の配信
+- ホイール状態 `/joint_states` の配信
+- LiDAR `/scan` からのクラスタリング（PCL EuclideanClusterExtraction）
 - クラスタ中心の推定、速度推定、ID一貫性維持、ロスト復帰
 - Follow-me 制御（停止距離/角度・速度制限・PID・ジョイスティック非常停止）
 - 可視化トピック（クラスタ点群・中心・対象）配信
@@ -29,22 +29,19 @@
 ## デモ・成果物（リンク用プレースホルダ）
 - 実走動画（屋内）: TBD
 - 実走動画（屋外）: TBD
-- ベンチマーク/ログ（bag, csv）: TBD
 
-## 定量的な結果（テンプレート）
-- 追従安定距離: 目標 0.3 m / 実測 TBD
-- 最大追従速度: 目標 0.25 m/s / 実測 TBD
-- 角度応答（90°旋回時間）: 目標 ≤ X s / 実測 TBD
-- 誤検出率（静止物を脚と誤認）: 目標 ≤ Y% / 実測 TBD
+
 
 ## 課題と学び
 - 近接・遮蔽時のIDスワップ対策（履歴・速度予測のさらなる強化余地）
 - 動的環境でのロバスト性（多人数、交差、停止/再開）
 - センサ/駆動レイテンシと制御ゲインのすり合わせ
 
-## 1年のタイムライン（例）
-- Q1: 環境整備（Docker/依存パッケージ）、URDF/RViz 整理
-- Q2: YP-Spur ブリッジ初版、里程計/TF 配信、手動操作
-- Q3: クラスタリング・追跡・可視化の実装、Follow-me 初期版
-- Q4: 追従チューニング、Bringup/デバッグ手順の整備、Wiki 下書き
+## 1年のタイムライン
 
+| 期間 | 四半期 | 主な取り組み |
+|---|---|---|
+| 2024-11-21 ~ 2025-02-18 | Q1 | 環境整備（Docker/依存パッケージ）、YP-Spur ブリッジ導入、Bringup/URDF/RViz の基盤整備 |
+| 2025-02-20 ~ 2025-03-09 | Q2 | LiDARクラスタリング・トラッキング実装、Follow target/PID 制御の初期版 |
+| 2025-03-10 ~ 2025-04-30 | Q3 | ログ/可視化/メッセージ拡充、ロスト復帰や選定ロジックの強化、安定化 |
+| 2025-05-01 ~ 2025-09-23 | Q4 | パラメータチューニング（BLDC/DC切替含む）、追従性改善、各種バグ修正と最終調整 |
