@@ -7,11 +7,11 @@
 ### 走行
 YP-Spur ブリッジが `/cmd_vel` → 走行を実現し、`/odom`・`/joint_states`・TF を配信。URDF+RViz で動作を可視化。  
 <img src=../imgs/logi.png width=20%> + <img src=../imgs/icart_mini.png width=20%> + <img src=../imgs/icart_urdf.png width=20%>  
-<img src="../videos/ypspur.gif" width="40%">
+<img src="../videos/ypspur.gif" width="70%">
 
 ### センサ
 Hokuyo UST-10LX を [urg_node2](https://github.com/Hokuyo-aut/urg_node2)（北陽電機公式 ROS 2 ドライバ）で接続し、/scan 配信や RViz 可視化、バッグ記録の手順を整備。   
-<img src=../imgs/icart_rviz.png width=40%>
+<img src=../imgs/icart_rviz.png width=70%>
 
 ### 基板
 24V→5V電源、インジケータ、電圧計測、ブザーを備えた Raspberry Pi 拡張ボードを活用。  
@@ -19,9 +19,9 @@ Hokuyo UST-10LX を [urg_node2](https://github.com/Hokuyo-aut/urg_node2)（北�
 
 ### 追従
 karugamoのソースコードを参考に、LiDAR 脚クラスタ検出・ID追跡・Follow-me を実装。  
-<img src="../videos/karugamo.gif" width="50%">  
-<img src="../videos/follow-me_sim.gif" width="50%">  
-<img src="../videos/follow-me_real.gif" width="50%">  
+<img src="../videos/karugamo.gif" width="70%">  
+<img src="../videos/follow-me_sim.gif" width="70%">  
+<img src="../videos/follow-me_real.gif" width="70%">  
 
 ### Docker / 開発環境
 ロボット搭載 Raspberry Pi 上で Docker により環境を固定化し、別PCから同一設定で操作・可視化可能に整備。
