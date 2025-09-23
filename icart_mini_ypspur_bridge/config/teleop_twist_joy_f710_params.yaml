@@ -10,7 +10,7 @@ teleop_twist_joy_node:
     axis_angular:  # Left thumb stick horizontal
       yaw: 0
     scale_angular:
-      yaw: 0.4  # icart
+      yaw: 1.0  # icart
       # yaw: 2.0 # BLDC
 
     enable_button: 4  # Left trigger button

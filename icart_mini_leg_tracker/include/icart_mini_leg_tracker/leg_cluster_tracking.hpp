@@ -15,6 +15,8 @@
 #include <set>
 #include <random>
 #include <iomanip> 
+#include <limits>
+#include <string>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/search/kdtree.h>
@@ -35,18 +37,21 @@
 #define CLUSTER_TOLERANCE 0.05 // ?m以内の点を同じクラスタにする[m]
 #define LOST_CLUSTER_TIMEOUT 1.0 // 失われたクラスタのタイムアウト[s]
 #define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
-#define STOP_DISTANCE_THRESHOLD 0.3 //[m]
+#define STOP_DISTANCE_THRESHOLD 0.35 //[m]
 #define MAX_CLUSTER_DISTANCE 2.5 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
 #define STATIC_SPEED_THRESHOLD 0.1 // 静止状態と判定するしきい値[m/s]
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
+#define LOST_DISTANCE_JUMP 0.4 //大きく離れたとみなす距離変化[m]
+#define LOST_ANGLE_JUMP (M_PI/2.0) // 大きく離れたとみなす角度変化[rad]
+#define LOOP_PERIOD_SAMPLE_WINDOW 50 // 平均周期を算出するフレーム数
 
 // 速度制限
 // #define MAX_SPEED 2.0 // BLDC用
 #define MAX_SPEED 0.25 // icart用
 #define MIN_SPEED 0.05
 // #define MAX_TURN_SPEED M_PI  // BLDC用
-#define MAX_TURN_SPEED M_PI/4 // icart用
+#define MAX_TURN_SPEED M_PI/3 // icart用
 #define PREDICTED_VEL_GAIN 0.1
 #define LOST_PREDICTED_VEL_GAIN 0.05
 
@@ -117,6 +122,7 @@ private:
     void updateTrackingState(int target_id, int second_id, geometry_msgs::msg::Point target_pos);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     void resetFollowTarget();
+    void clearLastSelectionInfo();
 
     // 可視化関連
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
@@ -127,6 +133,8 @@ private:
     // 移動制御
     void publishCmdVel(double target_distance, double target_angle);
     
+    void publishLostState(bool lost);
+
     // メンバ変数
     std::vector<std_msgs::msg::ColorRGBA> color_palette_;
     int next_cluster_id_;
@@ -152,7 +160,14 @@ private:
     bool stop_by_joystick_;
     int current_target_id_;  // 追従対象のクラスタID
     int current_second_id_;  // 追従対象のクラスタID
-    
+
+    bool last_selection_called_;
+    int last_selection_target_id_;
+    std::string last_selection_reason_;
+    double last_selection_movement_;
+    double last_selection_distance_to_robot_;
+    double last_selection_timestamp_;
+
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;
     double prev_error_angle = 0.0, integral_angle = 0.0;
@@ -170,6 +185,11 @@ private:
     rclcpp::Publisher<icart_msg::ClusterInfoArray>::SharedPtr cluster_info_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr is_lost_target_publisher_;
+
+    // 計測
+    rclcpp::Time last_callback_time_;
+    double accumulated_loop_period_;
+    size_t loop_sample_count_;
 };
 
 #endif // LEG_CLUSTER_TRACKING_HPP
