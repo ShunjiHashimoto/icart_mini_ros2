@@ -1,5 +1,9 @@
 #include "icart_mini_leg_tracker/leg_cluster_tracking.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
 LegClusterTracking::LegClusterTracking() : 
     Node("leg_cluster_tracking_node"),
     next_cluster_id_(1), 
@@ -27,6 +31,8 @@ LegClusterTracking::LegClusterTracking() :
     is_lost_target_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/leg_tracker/is_lost_target", 10);
 
     RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
+
+    clearLastSelectionInfo();
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -283,7 +289,7 @@ bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg
     for (auto it = cluster_centers.begin(); it != cluster_centers.end(); ) {
         const auto &center = it->second;
         // 正面0.6m以内かつ左右0.2m以内のクラスタのみ採用
-        if (!(center.x > 0 && center.x < 1.0 && fabs(center.y) < 0.4)) {
+        if (!(center.x > 0 && center.x < 0.6 && fabs(center.y) < 0.2)) {
             RCLCPP_INFO(this->get_logger(), "クラスタID %d は有効領域外のため除外", it->first);
             it = cluster_centers.erase(it);  // 条件を満たさないクラスタを削除
         } else {
@@ -534,6 +540,13 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
     double selected_movement = std::numeric_limits<double>::max();
     double selected_distance = std::numeric_limits<double>::max();
 
+    last_selection_called_ = true;
+    last_selection_target_id_ = -1;
+    last_selection_reason_ = "processing";
+    last_selection_movement_ = -1.0;
+    last_selection_distance_to_robot_ = -1.0;
+    last_selection_timestamp_ = this->now().seconds();
+
     RCLCPP_INFO(this->get_logger(), "selectNewTarget開始: previous_target_found=%s, cluster_count=%zu",
                 previous_target_found ? "true" : "false", cluster_centers.size());
 
@@ -572,6 +585,7 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
     }
 
     if (new_target_id == -1) {
+        last_selection_reason_ = "not_found";
         RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: 候補が見つかりませんでした");
         return std::nullopt;  // 追従対象なし
     }
@@ -580,12 +594,21 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
     if (selected_by_previous && !selected_by_distance) {
         RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d を前回位置優先で選択 (移動距離: %.3f, ロボット距離: %.3f)",
                     new_target_id, selected_movement, dist_to_robot);
+        last_selection_reason_ = "previous_target";
+        last_selection_movement_ = selected_movement;
     } else if (selected_by_distance) {
         RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d をロボットとの距離優先で選択 (距離: %.3f)",
                     new_target_id, selected_distance);
+        last_selection_reason_ = "closest_robot";
+        last_selection_movement_ = -1.0;
     } else {
         RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d を選択", new_target_id);
+        last_selection_reason_ = "other";
+        last_selection_movement_ = -1.0;
     }
+
+    last_selection_target_id_ = new_target_id;
+    last_selection_distance_to_robot_ = dist_to_robot;
 
     return std::make_pair(new_target_id, new_target_pos);
 }
@@ -621,6 +644,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     // 【1】最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
     std_msgs::msg::Bool is_lost_target;
     is_lost_target.data = true;
+    clearLastSelectionInfo();
     if (cluster_centers.empty()) {
         publishCmdVel(0.0, 0.0);  // 停止指令を送信
         is_lost_target_publisher_->publish(is_lost_target);
@@ -662,7 +686,17 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
             is_lost_target_publisher_->publish(is_lost_target);
             this->current_target_id_ = -1;
             this->current_second_id_ = -1;
-            csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
+            csv_logger_->saveClusterData(
+                cluster_id_history_,
+                cluster_info_map_,
+                current_target_id_,
+                current_second_id_,
+                last_selection_called_,
+                last_selection_target_id_,
+                last_selection_reason_,
+                last_selection_movement_,
+                last_selection_distance_to_robot_,
+                last_selection_timestamp_);
             return;
         }
     }
@@ -693,7 +727,17 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     is_lost_target.data = false;
     is_lost_target_publisher_->publish(is_lost_target);
 
-    csv_logger_->saveClusterData(cluster_id_history_, cluster_info_map_, current_target_id_, current_second_id_);
+    csv_logger_->saveClusterData(
+        cluster_id_history_,
+        cluster_info_map_,
+        current_target_id_,
+        current_second_id_,
+        last_selection_called_,
+        last_selection_target_id_,
+        last_selection_reason_,
+        last_selection_movement_,
+        last_selection_distance_to_robot_,
+        last_selection_timestamp_);
 }
 
 void LegClusterTracking::resetFollowTarget() {
@@ -712,6 +756,16 @@ void LegClusterTracking::resetFollowTarget() {
     integral_dist = 0.0;
     integral_angle = 0.0;
     previous_target_pos_ =  geometry_msgs::msg::Point();
+    clearLastSelectionInfo();
+}
+
+void LegClusterTracking::clearLastSelectionInfo() {
+    last_selection_called_ = false;
+    last_selection_target_id_ = -1;
+    last_selection_reason_ = "none";
+    last_selection_movement_ = -1.0;
+    last_selection_distance_to_robot_ = -1.0;
+    last_selection_timestamp_ = -1.0;
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {

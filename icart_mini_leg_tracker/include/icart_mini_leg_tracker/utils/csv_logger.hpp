@@ -18,8 +18,12 @@ public:
 
     void resetCSVFile();
     void saveClusterData(const std::map<int, std::vector<int>>& cluster_id_history_,
-                                const std::map<int, icart_msg::ClusterInfo>& cluster_infos_,
-                                int current_target_id_, int current_second_id_);
+                         const std::map<int, icart_msg::ClusterInfo>& cluster_infos_,
+                         int current_target_id_, int current_second_id_,
+                         bool select_called, int selected_target_id,
+                         const std::string &selection_reason,
+                         double selection_movement, double selection_distance_to_robot,
+                         double selection_timestamp);
 
 private:
     std::string filename_;

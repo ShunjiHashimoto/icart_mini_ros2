@@ -15,6 +15,8 @@
 #include <set>
 #include <random>
 #include <iomanip> 
+#include <limits>
+#include <string>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/search/kdtree.h>
@@ -117,6 +119,7 @@ private:
     void updateTrackingState(int target_id, int second_id, geometry_msgs::msg::Point target_pos);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     void resetFollowTarget();
+    void clearLastSelectionInfo();
 
     // 可視化関連
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
@@ -152,7 +155,14 @@ private:
     bool stop_by_joystick_;
     int current_target_id_;  // 追従対象のクラスタID
     int current_second_id_;  // 追従対象のクラスタID
-    
+
+    bool last_selection_called_;
+    int last_selection_target_id_;
+    std::string last_selection_reason_;
+    double last_selection_movement_;
+    double last_selection_distance_to_robot_;
+    double last_selection_timestamp_;
+
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;
     double prev_error_angle = 0.0, integral_angle = 0.0;
