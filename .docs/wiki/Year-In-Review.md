@@ -3,51 +3,46 @@
 本ページは、icart_mini_ros2 の過去1年間の取り組みを振り返る報告用サマリです。
 
 ## ハイライト
-- 走行: YP-Spur ブリッジで `/cmd_vel` → 走行、`/odom`・`/joint_states`・TF を配信
-  - URDF（xacro）と RViz 構成を整理し可観測性を向上  
-  <img src=../imgs/icart_mini.png width=20%> →→ 
-  <img src=../imgs/icart_urdf.png width=40%>
-- センサ: Hokuyo UST-10LX(会社から借りているもの) を urg_node2 で接続、RViz 可視化  
-  <img src=../imgs/icart_rviz.png width=80%>
-- 基板：別のロボットで使用していたRaspberry Pi拡張ボードを使用  
-  - 24V->5Vの電源回路、インジケータ、電圧計測、ブザー
-  <img src=../imgs/kicad.png width=80%>
-- 追従: LiDAR 脚クラスタ検出・ID追跡・Follow-me（PID）を実装
-- Docker/開発環境: 環境非依存・バージョン固定・別PCからの可視化・セットアップ短縮・切り分け容易
+
+### 走行
+YP-Spur ブリッジが `/cmd_vel` → 走行を実現し、`/odom`・`/joint_states`・TF を配信。URDF+RViz で動作を可視化。  
+<img src=../imgs/logi.png width=20%> + <img src=../imgs/icart_mini.png width=20%> + <img src=../imgs/icart_urdf.png width=20%>  
+<img src="../videos/ypspur.gif" width="40%">
+
+### センサ
+Hokuyo UST-10LX を [urg_node2](https://github.com/Hokuyo-aut/urg_node2)（北陽電機公式 ROS 2 ドライバ）で接続し、/scan 配信や RViz 可視化、バッグ記録の手順を整備。   
+<img src=../imgs/icart_rviz.png width=40%>
+
+### 基板
+24V→5V電源、インジケータ、電圧計測、ブザーを備えた Raspberry Pi 拡張ボードを活用。  
+<img src=../imgs/kicad.png width=40%>
+
+### 追従
+karugamoのソースコードを参考に、LiDAR 脚クラスタ検出・ID追跡・Follow-me を実装。  
+<img src="../videos/karugamo.gif" width="50%">  
+<img src="../videos/follow-me_sim.gif" width="50%">  
+<img src="../videos/follow-me_real.gif" width="50%">  
+
+### Docker / 開発環境
+ロボット搭載 Raspberry Pi 上で Docker により環境を固定化し、別PCから同一設定で操作・可視化可能に整備。
+![Docker Development Flow](../imgs/docker_overview.png)
+1. **ロボット搭載の Raspberry Pi（ホスト）** が `docker run` を実行し、USBデバイス(`/dev/ttyACM0` 等)や X11/Wayland をコンテナへ共有。
+2. **Docker Engine（Raspberry Pi 上）** が ROS 2 Humble コンテナを起動し、`icart_mini_ros2` と依存を固定。
+3. **Dockerコンテナ内部** では `icart_mini_bringup` / `icart_mini_ypspur_bridge` / `icart_mini_leg_tracker` / `teleop_twist_joy` / `rviz` 等が動作。
+4. **センサ・モータ系（LiDAR / YP-Spur / エンコーダ）** は USB パススルーで連携し、制御指令と計測データを ROS トピックに反映。
+5. **別PCやタブレット** は WiFi 越しに `docker exec` / SSH / GUI 転送で接続し、rviz表示やデバッグ、ログ取得を同一環境で再現。
 
 
-## 現状のシステム構成
-- 起動: `icart_mini_bringup`
-  - Docker での開発・実行環境整備（ビルドスクリプト、起動スクリプト）
-- 表示/URDF: `icart_mini_description`
-- ypspurのROS 2へのラッパ: `icart_mini_ypspur_bridge`
-- 追従: `icart_mini_leg_tracker`
-
-## 実装済み機能
-- 速度指令 
-  - `/cmd_vel` を YP-Spur 経由で走行系に反映
-  - オドメトリ `/odom` と `/tf`（`odom`→`base_footprint`）の配信
-  - ホイール状態 `/joint_states` の配信
-- LiDAR 
-  - `/scan` からのクラスタリング（PCL EuclideanClusterExtraction）
-- クラスタ中心の推定、速度推定、ID一貫性維持、ロスト復帰
-- Follow-me 制御（停止距離/角度・速度制限・PID・ジョイスティック非常停止）
-- 可視化トピック（クラスタ点群・中心・対象）配信
-
-## デモ・成果物
-- 実走動画（屋内）: TBD
-- 実走動画（屋外）: TBD
-
-
-## 課題と学び
-- 近接・遮蔽時のIDスワップ対策（履歴・速度予測のさらなる強化余地）
-- 動的環境でのロバスト性（多人数、交差、停止/再開）
+## 課題
+- 障害物が多い環境下での追従性向上、主に乗り移り対策
+- 充電回路、バッテリー電圧計測回路の修正
 
 ## 所感（開発メモ）
 - 困ったことは特になし（安定して開発・運用）
 - 初期に会社PCでYP-Spurを動かそうとした際に“煙くさい”事象があり要注意（以後は問題なし）
 - 以降は安定して動作。急な暴走などはなし（感謝）
 - 家の中で開発する分にはちょうどよい大きさで取り回しが良い
+- 大学生のときに欲しかった、研究室ではKobukiというお掃除ロボットみたいなロボットを使用しており、使い勝手はいまいちだった。
 
 ## 1年のタイムライン
 
