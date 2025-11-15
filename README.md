@@ -25,8 +25,9 @@
 $ mkdir -p ~/icart_ws/src
 $ cd ~/icart_ws
 # 本リポジトリを src/ に配置した状態で依存パッケージを取得
-$ vcs import src < src/ros2.repos
+$ vcs import src < src/icart_mini_ros2/ros2.repos
 ```
+リポジトリルートには依存パッケージの取得元をまとめた `ros2.repos` を同梱しています（`icart_mini_ros2`, `i-Cart`, `yp-spur`, `urg_node2`）。`vcs import` を使えば、このファイルに記載されたリビジョンで依存リポジトリを一括取得できます。
 
 ### YP-Spur のビルド
 `icart_mini_ypspur_bridge` はホストに `YP-Spur` がインストール済みであることを前提とします。

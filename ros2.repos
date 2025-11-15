@@ -1,0 +1,17 @@
+repositories:
+  icart_mini_ros2:
+    type: git
+    url: git@github.com:ShunjiHashimoto/icart_mini_ros2.git
+    version: main
+  i-Cart:
+    type: git
+    url: https://github.com/BND-tc/i-Cart.git
+    version: main
+  yp-spur:
+    type: git
+    url: https://github.com/BND-tc/yp-spur.git
+    version: master
+  urg-node:
+    type: git
+    url: https://github.com/ShunjiHashimoto/urg_node2.git
+    version: main
