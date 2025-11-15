@@ -7,4 +7,4 @@ sleep 5
 export PATH="$HOME/.local/bin:$PATH"
 
 cd ~/icart_ws/src/icart_mini_ros2/docker
-./run.sh bash -lc "~/icart_ws/src/icart_mini_ros2/auto_start.sh"
+./run.sh bash -lc "~/icart_ws/src/icart_mini_ros2/sh/auto_start.sh"

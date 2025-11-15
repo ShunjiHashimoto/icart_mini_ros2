@@ -18,6 +18,7 @@
 - `icart_mini_leg_tracker`: LiDAR 点群から脚クラスタを追跡し `/cmd_vel` を生成するノード
 - `icart_mini_ypspur_bridge`: `YPSpur` と ROS 2 の橋渡し（`/cmd_vel` からの制御・オドメトリ生成）
 - `docker`: 開発・実行環境を統一するための Dockerfile / スクリプト
+- `sh`: 実機 bringup を Docker で起動・停止する補助スクリプト (`start_icart.sh`, `stop_icart.sh`, `auto_start.sh`)
 
 ## セットアップ
 ### ワークスペース準備
