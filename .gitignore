@@ -1,2 +1,11 @@
 *.csv
+AGENT.md
+AGENTS.md
+TASK.md
 .vscode/settings.json
+.code-workspace
+*.code-workspace
+.codex
+.codex/
+__pycache__/
+*.pyc

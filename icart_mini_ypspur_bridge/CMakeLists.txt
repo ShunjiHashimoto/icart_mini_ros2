@@ -43,8 +43,9 @@ install(TARGETS icart_mini_ypspur_bridge
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
-install(DIRECTORY include/
-  DESTINATION include/${PROJECT_NAME}
+
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

@@ -1,5 +1,5 @@
-FROM arm64v8/ros:humble-perception
-#FROM osrf/ros:humble-desktop-full
+#FROM arm64v8/ros:humble-perception
+FROM osrf/ros:humble-desktop-full
 
 # キーボード設定の選択を省略
 ARG DEBIAN_FRONTEND=noninteractive
@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y \
   gdb \
   cmake \
   git \
-  vim \
   wget \
   tmux \
   x11-apps \
@@ -34,12 +33,14 @@ RUN apt-get update && apt-get install -y \
   ros-humble-urg-node \
   ros-humble-sensor-msgs \
   ros-humble-xacro \
+  ros-humble-gazebo-ros-pkgs \
   ros-humble-rviz2 \
   ros-humble-rmw-cyclonedds-cpp \
   ros-humble-geometry-msgs \
   ros-humble-nav-msgs \
   ros-humble-tf2 \
-  ros-humble-joy \ 
+  ros-humble-joy \
+  ros-humble-teleop-twist-keyboard \
   ros-humble-teleop-twist-joy \
   ros-humble-joint-state-publisher-gui \
   ros-humble-pcl-ros \
@@ -48,6 +49,7 @@ RUN apt-get update && apt-get install -y \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV RMW_IMPLEMENTATION rmw_cyclonedds_cpp
+ENV GAZEBO_SUPPRESS_EOL_WARNING 1
 
 # Install pip packages
 # pip install numpy==1.24.4
