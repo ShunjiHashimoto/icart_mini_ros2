@@ -9,6 +9,7 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 #include "std_msgs/msg/bool.hpp" 
+#include "std_msgs/msg/string.hpp"
 #include <vector>
 #include <cmath>
 #include <map>
@@ -45,6 +46,8 @@
 #define LOST_DISTANCE_JUMP 0.4 //大きく離れたとみなす距離変化[m]
 #define LOST_ANGLE_JUMP (M_PI/2.0) // 大きく離れたとみなす角度変化[rad]
 #define LOOP_PERIOD_SAMPLE_WINDOW 50 // 平均周期を算出するフレーム数
+#define INITIAL_TARGET_MAX_X 1.0 // 初期追従対象として採用する正面方向の最大距離[m]
+#define INITIAL_TARGET_MAX_ABS_Y 0.5 // 初期追従対象として採用する左右方向の最大距離[m]
 
 // 速度制限
 // #define MAX_SPEED 2.0 // BLDC用
@@ -70,7 +73,7 @@
 #define FOLLOWME_STOP_BUTTON 6
 
 // ログファイル
-#define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/logs/cluster_tracking_log.csv"
+#define FILENAME "/root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/csv/cluster_tracking_log.csv"
 
 namespace icart_msg = icart_mini_leg_tracker::msg;
 
@@ -82,6 +85,10 @@ private:
     // コールバック関数
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg);
+    void followControlCallback(const std_msgs::msg::String::SharedPtr msg);
+    void startFollowMe(const std::string &source);
+    void stopFollowMe(const std::string &source);
+    void setEmergencyStop(bool enabled, const std::string &source);
 
     // データ処理関連
     std::vector<geometry_msgs::msg::Point> generateXYPoints(const sensor_msgs::msg::LaserScan::SharedPtr msg);
@@ -179,6 +186,7 @@ private:
     // ROS2 ノード関連
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscriber_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr follow_control_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr cluster_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr person_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;

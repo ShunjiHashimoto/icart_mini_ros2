@@ -71,7 +71,12 @@ install(TARGETS leg_cluster_tracking_node
 
 install(PROGRAMS
   scripts/led_status.py
+  scripts/moving_leg_pair_controller.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

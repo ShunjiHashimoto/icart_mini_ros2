@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<robot name="leg_pair" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:arg name="leg_radius" default="0.045"/>
+  <xacro:arg name="leg_height" default="0.7"/>
+  <xacro:arg name="leg_separation" default="0.22"/>
+
+  <xacro:property name="leg_radius" value="$(arg leg_radius)"/>
+  <xacro:property name="leg_height" value="$(arg leg_height)"/>
+  <xacro:property name="leg_separation" value="$(arg leg_separation)"/>
+  <xacro:property name="leg_mass" value="1.0"/>
+
+  <xacro:macro name="leg_inertia" params="mass radius height">
+    <inertial>
+      <origin xyz="0 0 ${height / 2.0}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (3.0 * radius * radius + height * height) / 12.0}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${mass * (3.0 * radius * radius + height * height) / 12.0}"
+        iyz="0.0"
+        izz="${mass * radius * radius / 2.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <link name="leg_pair_base">
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <joint name="left_leg_joint" type="fixed">
+    <origin xyz="0 ${leg_separation / 2.0} 0" rpy="0 0 0"/>
+    <parent link="leg_pair_base"/>
+    <child link="left_leg"/>
+  </joint>
+
+  <link name="left_leg">
+    <xacro:leg_inertia mass="${leg_mass}" radius="${leg_radius}" height="${leg_height}"/>
+    <visual>
+      <origin xyz="0 0 ${leg_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="${leg_height}" radius="${leg_radius}"/>
+      </geometry>
+      <material name="leg_blue">
+        <color rgba="0.1 0.25 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${leg_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="${leg_height}" radius="${leg_radius}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="right_leg_joint" type="fixed">
+    <origin xyz="0 -${leg_separation / 2.0} 0" rpy="0 0 0"/>
+    <parent link="leg_pair_base"/>
+    <child link="right_leg"/>
+  </joint>
+
+  <link name="right_leg">
+    <xacro:leg_inertia mass="${leg_mass}" radius="${leg_radius}" height="${leg_height}"/>
+    <visual>
+      <origin xyz="0 0 ${leg_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="${leg_height}" radius="${leg_radius}"/>
+      </geometry>
+      <material name="leg_blue">
+        <color rgba="0.1 0.25 0.8 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${leg_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="${leg_height}" radius="${leg_radius}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <gazebo reference="left_leg">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <gazebo reference="right_leg">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+</robot>

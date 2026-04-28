@@ -12,7 +12,7 @@ find_package(robot_state_publisher REQUIRED)
 find_package(rviz2 REQUIRED)
 
 install(
-  DIRECTORY urdf rviz launch worlds
+  DIRECTORY urdf rviz launch worlds models
   DESTINATION share/${PROJECT_NAME}
 )
 
