@@ -20,6 +20,8 @@ docker run --rm \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v ~/.Xauthority:/root/.Xauthority:ro \
     --volume="${HOME}/icart_ws:/root/icart_ws" \
+    --volume="/dev/input:/dev/input" \
+    --volume="/dev/bus/usb:/dev/bus/usb" \
     --name=$CONTAINER_NAME \
     -e TZ=Asia/Tokyo \
     -e GAZEBO_SUPPRESS_EOL_WARNING=1 \

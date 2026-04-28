@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <cstddef>
 #include <limits>
 
 LegClusterTracking::LegClusterTracking() : 
@@ -45,16 +46,20 @@ LegClusterTracking::LegClusterTracking() :
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-    if (msg->buttons[EMERGENCY_BUTTON] == 1) {
+    auto is_pressed = [&msg](std::size_t index) {
+        return index < msg->buttons.size() && msg->buttons[index] == 1;
+    };
+
+    if (is_pressed(EMERGENCY_BUTTON)) {
         setEmergencyStop(true, "/joy");
     }
-    else if (msg->buttons[UNLOCK_EMERGENCY_BUTTON] == 1) {
+    else if (is_pressed(UNLOCK_EMERGENCY_BUTTON)) {
         setEmergencyStop(false, "/joy");
     }
-    else if (msg->buttons[FOLLOWME_START_BUTTON] == 1) {
+    else if (is_pressed(FOLLOWME_START_BUTTON)) {
         startFollowMe("/joy");
     }
-    else if (msg->buttons[FOLLOWME_STOP_BUTTON] == 1) {
+    else if (is_pressed(FOLLOWME_STOP_BUTTON)) {
         stopFollowMe("/joy");
     }
 }
@@ -132,7 +137,6 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
     } else {
         trackClusters(cluster_centers);
         followTarget(cluster_centers);
-        std::cout << "========================================\n\n";
         publishClusterMarkers(points, clusters);
         publishMatchedClusterCenters(cluster_centers);
         publishClusterInfoMap();
@@ -463,19 +467,19 @@ void LegClusterTracking::matchPreviousClusters(
                 if (matched_id == -1 || lost_dist < min_distance) {
                     matched_id = lost_matched_id;  // ロストクラスタのIDを採用
                     min_distance = lost_dist;
-                    RCLCPP_INFO(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
+                    RCLCPP_DEBUG(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
                 }
             }
         }
 
         if (matched_id == -1) {
             if (nearest_distance == std::numeric_limits<double>::max()) {
-                RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: N/A", current_id, matched_id);
+                RCLCPP_DEBUG(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: N/A", current_id, matched_id);
             } else {
-                RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f (未マッチ)", current_id, matched_id, nearest_distance);
+                RCLCPP_DEBUG(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f (未マッチ)", current_id, matched_id, nearest_distance);
             }
         } else {
-            RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
+            RCLCPP_DEBUG(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
         }
 
         // マッチしたクラスタIDをマッピング、なければ新規付与
@@ -900,7 +904,9 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
     cmd_msg.linear.x = std::clamp(linear_velocity, MIN_SPEED, MAX_SPEED);
     cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
-    RCLCPP_INFO(this->get_logger(), "直進速度: %.2f, 回転速度: %.2f", linear_velocity, angular_velocity);
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "直進速度: %.2f, 回転速度: %.2f", linear_velocity, angular_velocity);
     // if(abs(error_angle) > M_PI/4) { // BLDC
     if(abs(error_angle) > M_PI/4) { // icart
         cmd_msg.linear.x = 0.0; //　対象との角度が大きい場合は旋回を優先する

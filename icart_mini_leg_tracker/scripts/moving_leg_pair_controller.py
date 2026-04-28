@@ -4,6 +4,7 @@ from typing import Optional
 
 import rclpy
 from gazebo_msgs.msg import EntityState
+from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Twist
 from rclpy.executors import ExternalShutdownException
@@ -54,14 +55,18 @@ class MovingLegPairController(Node):
         self.z = self.initial_z
         self.yaw = self.initial_yaw
         self.circle_phase = 0.0
-        self.straight_direction = 1.0
+        self.straight_finished = False
         self.paused = not self.auto_start
         self.last_time = self.get_clock().now()
         self.last_cmd_time: Optional[rclpy.time.Time] = None
         self.manual_cmd = Twist()
         self.pending_request = None
+        self.model_seen = False
 
         self.set_state_client = self.create_client(SetEntityState, '/set_entity_state')
+        self.model_states_subscriber = self.create_subscription(
+            ModelStates, '/model_states', self.model_states_callback, 10
+        )
         self.cmd_subscriber = self.create_subscription(Twist, '/person/cmd_vel', self.cmd_callback, 10)
         self.control_subscriber = self.create_subscription(String, '/person/control', self.control_callback, 10)
         self.event_publisher = self.create_publisher(String, '/person/motion_event', 10)
@@ -73,6 +78,9 @@ class MovingLegPairController(Node):
         self.get_logger().info(
             f"Moving leg pair controller ready: model={self.model_name}, mode={self.path_mode}"
         )
+
+    def model_states_callback(self, msg: ModelStates):
+        self.model_seen = self.model_name in msg.name
 
     def cmd_callback(self, msg: Twist):
         self.manual_cmd = msg
@@ -107,7 +115,7 @@ class MovingLegPairController(Node):
         self.z = self.initial_z
         self.yaw = self.initial_yaw
         self.circle_phase = 0.0
-        self.straight_direction = 1.0
+        self.straight_finished = False
         self.send_state()
 
     def publish_event(self, data: str):
@@ -125,6 +133,8 @@ class MovingLegPairController(Node):
 
         if not self.set_state_client.service_is_ready():
             self.set_state_client.wait_for_service(timeout_sec=0.0)
+            return
+        if not self.model_seen:
             return
 
         if not self.paused:
@@ -156,15 +166,15 @@ class MovingLegPairController(Node):
         self.yaw += angular_z * dt
 
     def integrate_straight(self, dt: float):
-        self.x += self.straight_direction * self.straight_speed * dt
-        if self.x > self.straight_max_x:
+        if self.straight_finished:
+            return
+        self.x += abs(self.straight_speed) * dt
+        self.yaw = 0.0
+        if self.x >= self.straight_max_x:
             self.x = self.straight_max_x
-            self.straight_direction = -1.0
-            self.yaw = math.pi
-        elif self.x < self.straight_min_x:
-            self.x = self.straight_min_x
-            self.straight_direction = 1.0
-            self.yaw = 0.0
+            self.straight_finished = True
+            self.paused = True
+            self.publish_event('straight_reached_max')
 
     def integrate_circle(self, dt: float):
         self.circle_phase += self.circle_angular_speed * dt

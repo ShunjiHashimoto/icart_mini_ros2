@@ -71,6 +71,7 @@ install(TARGETS leg_cluster_tracking_node
 
 install(PROGRAMS
   scripts/led_status.py
+  scripts/joystick_follow_me_teleop.py
   scripts/moving_leg_pair_controller.py
   DESTINATION lib/${PROJECT_NAME}
 )

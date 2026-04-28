@@ -95,6 +95,13 @@ $ ros2 run icart_mini_leg_tracker leg_cluster_tracking_node
 | 追従開始 | 7 (Start) | 追従対象をリセットしフォローミー開始 |
 | 追従停止 | 6 (Back) | 追従状態を終了しターゲット情報をクリア |
 
+### シミュレーション Follow me (ジョイスティック)
+Docker コンテナ内で Gazebo / RViz / 脚モデル / 追従ノード / `joy_node` をまとめて起動します。
+```bash
+$ ros2 launch icart_mini_leg_tracker follow_me_joy_sim.launch.py
+```
+起動直後はジョイスティックの左スティックで `icart_mini` を手動操縦し、Start ボタン (ID 7) で Follow me を開始します。開始後は同じスティック入力が脚モデル用の `/person/cmd_vel` に切り替わり、ロボットは LiDAR 上の脚クラスタを追従します。Back ボタン (ID 6) で追従を停止し、操作対象を `icart_mini` に戻します。非常停止 RB (ID 5) と非常停止解除 LB (ID 4) は実機と同じ割り当てです。
+
 ## ノード / トピック概要
 | ノード | パッケージ | 役割 | 購読 | 発行 |
 | ------ | ---------- | ---- | ---- | ---- |
