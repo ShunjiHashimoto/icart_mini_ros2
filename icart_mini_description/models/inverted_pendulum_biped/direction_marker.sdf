@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="biped_direction_marker">
+    <static>false</static>
+    <kinematic>true</kinematic>
+    <link name="arrow">
+      <visual name="shaft">
+        <pose>0.10 0 0.035 0 1.57079632679 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.018</radius>
+            <length>0.20</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>1.0 0.78 0.05 1</ambient>
+          <diffuse>1.0 0.78 0.05 1</diffuse>
+          <specular>0.2 0.2 0.1 1</specular>
+        </material>
+      </visual>
+      <visual name="head">
+        <pose>0.24 0 0.035 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.09 0.10 0.045</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1.0 0.45 0.0 1</ambient>
+          <diffuse>1.0 0.45 0.0 1</diffuse>
+          <specular>0.2 0.1 0.0 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

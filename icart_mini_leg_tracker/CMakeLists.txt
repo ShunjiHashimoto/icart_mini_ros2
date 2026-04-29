@@ -74,6 +74,7 @@ install(PROGRAMS
   scripts/joystick_follow_me_teleop.py
   scripts/moving_leg_pair_controller.py
   scripts/inverted_pendulum_biped_controller.py
+  scripts/record_follow_me_bag.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

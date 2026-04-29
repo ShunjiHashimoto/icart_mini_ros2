@@ -34,6 +34,9 @@ class InvertedPendulumBipedController(Node):
 
         self.left_leg_name = self.declare_parameter('left_leg_name', 'biped_left_leg').value
         self.right_leg_name = self.declare_parameter('right_leg_name', 'biped_right_leg').value
+        self.direction_marker_name = self.declare_parameter(
+            'direction_marker_name', 'biped_direction_marker'
+        ).value
         self.reference_frame = self.declare_parameter('reference_frame', 'world').value
         self.path_mode = self.declare_parameter('path_mode', 'straight').value
         self.auto_start = as_bool(self.declare_parameter('auto_start', True).value)
@@ -135,6 +138,8 @@ class InvertedPendulumBipedController(Node):
             return
 
         required = {self.left_leg_name, self.right_leg_name}
+        if self.direction_marker_name:
+            required.add(self.direction_marker_name)
         if not required.issubset(self.model_names):
             return
 
@@ -200,6 +205,14 @@ class InvertedPendulumBipedController(Node):
             self.z,
             self.yaw,
         )
+        if self.direction_marker_name:
+            self.call_set_state(
+                self.direction_marker_name,
+                self.x,
+                self.y,
+                self.z,
+                self.yaw,
+            )
 
     def call_set_state(self, name: str, x: float, y: float, z: float, yaw: float):
         request = SetEntityState.Request()

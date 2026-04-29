@@ -31,19 +31,19 @@
 
     <model name="left_wall">
       <static>true</static>
-      <pose>1.2 0.85 0.35 0 0 0</pose>
+      <pose>1.8 1.60 0.35 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
             <box>
-              <size>2.0 0.08 0.70</size>
+              <size>3.8 0.08 0.70</size>
             </box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
             <box>
-              <size>2.0 0.08 0.70</size>
+              <size>3.8 0.08 0.70</size>
             </box>
           </geometry>
           <material>
@@ -56,19 +56,19 @@
 
     <model name="right_wall">
       <static>true</static>
-      <pose>1.2 -0.85 0.35 0 0 0</pose>
+      <pose>1.8 -1.60 0.35 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
             <box>
-              <size>2.0 0.08 0.70</size>
+              <size>3.8 0.08 0.70</size>
             </box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
             <box>
-              <size>2.0 0.08 0.70</size>
+              <size>3.8 0.08 0.70</size>
             </box>
           </geometry>
           <material>
@@ -81,7 +81,7 @@
 
     <model name="box_obstacle_front_left">
       <static>true</static>
-      <pose>0.95 0.38 0.22 0 0 0</pose>
+      <pose>1.35 0.82 0.22 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -106,7 +106,7 @@
 
     <model name="pillar_obstacle">
       <static>true</static>
-      <pose>1.55 -0.35 0.35 0 0 0</pose>
+      <pose>2.35 -0.78 0.35 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>

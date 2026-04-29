@@ -74,7 +74,13 @@ export CYCLONEDDS_URI=$HOME/icart_ws/src/cyclonedds.xml
 
 ## Docker 環境
 
-シミュレーションは Docker 内での実行を前提にしています。`docker/run.sh` は host network、DISPLAY 共有、`/dev/input`、`/dev/bus/usb` のマウントを行います。
+シミュレーションは Docker 内での実行を前提にしています。`docker/run.sh` は以下を設定します。
+
+- `--net=host`: ROS 2 / Gazebo の通信をホストと共有
+- `--privileged`: 入力デバイスや Gazebo/RViz の実行を簡単にするため
+- `/tmp/.X11-unix` と `~/.Xauthority`: Gazebo GUI / RViz の X11 表示
+- `/dev/input` と `/dev/bus/usb`: Logitech F710 などのジョイスティック
+- `~/icart_ws:/root/icart_ws`: ワークスペース共有
 
 ```bash
 cd ~/icart_ws/src/icart_mini_ros2/docker
@@ -89,6 +95,18 @@ cd /root/icart_ws
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker
 source install/setup.bash
+```
+
+シミュレーションの起動:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_biped_sim.launch.py
+```
+
+障害物あり:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
 ```
 
 別ターミナルから既存コンテナに入る場合:
@@ -298,21 +316,49 @@ Gazebo シミュレーションでは、リアルな人物モデルではなく�
 
 ## Rosbag / デバッグ
 
-代表的なトピックを記録します。
+シミュレーション中に別ターミナルでコンテナへ入り、代表的なトピックを記録します。
 
 ```bash
-ros2 bag record /scan /tf /tf_static /odom /cmd_vel /joy \
-  /person/cmd_vel /person/control /person/motion_event \
-  /leg_tracker/cluster_markers /leg_tracker/cluster_centers \
-  /leg_tracker/cluster_infos /leg_tracker/person_marker \
-  /leg_tracker/is_lost_target
+docker exec -it icart_mini_ros2 bash
+cd /root/icart_ws
+source install/setup.bash
+ros2 run icart_mini_leg_tracker record_follow_me_bag.sh
 ```
 
-LiDAR を記録した bag を再生して追跡ノードを確認する例:
+出力先を指定する場合:
 
 ```bash
-ros2 bag play my_bag --rate 0.5 --topics /scan /tf /tf_static --start-paused
+ros2 run icart_mini_leg_tracker record_follow_me_bag.sh /root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/rosbag/test_run
+```
+
+記録対象:
+
+- `/scan`
+- `/tf`, `/tf_static`
+- `/odom`
+- `/cmd_vel`
+- `/joy`
+- `/person/cmd_vel`, `/person/control`, `/person/motion_event`
+- `/leg_tracker/cluster_markers`
+- `/leg_tracker/cluster_centers`
+- `/leg_tracker/cluster_infos`
+- `/leg_tracker/person_marker`
+- `/leg_tracker/is_lost_target`
+
+LiDAR と joystick 入力を再生して追跡ノードを再デバッグする例:
+
+```bash
 ros2 run icart_mini_leg_tracker leg_cluster_tracking_node
+ros2 bag play /path/to/bag --clock --rate 0.5 \
+  --topics /scan /tf /tf_static /joy /person/cmd_vel /person/control /person/motion_event
+```
+
+再生結果の速度指令や追跡状態を別ターミナルで確認します。
+
+```bash
+ros2 topic echo /cmd_vel
+ros2 topic echo /leg_tracker/is_lost_target
+ros2 topic echo /leg_tracker/cluster_infos
 ```
 
 ClusterInfo を CSV として保存する例:

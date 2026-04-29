@@ -17,6 +17,9 @@ def generate_launch_description():
     rviz_config = os.path.join(description_share, 'rviz', 'follow_me_sim.rviz')
     world_file = os.path.join(description_share, 'worlds', 'follow_me_empty.world')
     leg_model = os.path.join(description_share, 'models', 'inverted_pendulum_biped', 'leg.sdf')
+    direction_marker_model = os.path.join(
+        description_share, 'models', 'inverted_pendulum_biped', 'direction_marker.sdf'
+    )
 
     world = LaunchConfiguration('world')
     gui = LaunchConfiguration('gui')
@@ -117,6 +120,19 @@ def generate_launch_description():
         ),
 
         Node(
+            package='gazebo_ros',
+            executable='spawn_entity.py',
+            arguments=[
+                '-entity', 'biped_direction_marker',
+                '-file', direction_marker_model,
+                '-x', initial_x,
+                '-y', initial_y,
+                '-z', initial_z,
+            ],
+            output='screen',
+        ),
+
+        Node(
             package='icart_mini_leg_tracker',
             executable='leg_cluster_tracking_node',
             name='leg_cluster_tracking_node',
@@ -130,6 +146,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'auto_start': False,
+                'direction_marker_name': 'biped_direction_marker',
                 'path_mode': path_mode,
                 'initial_x': initial_x,
                 'initial_y': initial_y,
