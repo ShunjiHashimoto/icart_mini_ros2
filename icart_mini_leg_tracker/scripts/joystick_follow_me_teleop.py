@@ -33,6 +33,7 @@ class JoystickFollowMeTeleop(Node):
         self.joy_subscriber = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
 
         self.mode = 'robot'
+        self.emergency_latched = False
         self.previous_buttons: List[int] = []
         self.get_logger().info(
             'Joystick teleop ready: robot mode before follow, person mode after follow start.'
@@ -58,11 +59,19 @@ class JoystickFollowMeTeleop(Node):
                 'Stop button pressed; leg tracker handles follow stop from /joy, joystick mode switched to robot.'
             )
         elif self.button_pressed(msg, self.emergency_button):
+            self.emergency_latched = True
             self.publish_zero(self.person_cmd_publisher)
             self.publish_zero(self.cmd_vel_publisher)
             self.get_logger().warn('Emergency button pressed; leg tracker handles emergency stop from /joy.')
         elif self.button_pressed(msg, self.clear_emergency_button):
+            self.emergency_latched = False
             self.get_logger().info('Clear emergency button pressed; leg tracker handles clear from /joy.')
+
+        if self.emergency_latched:
+            self.publish_zero(self.person_cmd_publisher)
+            self.publish_zero(self.cmd_vel_publisher)
+            self.previous_buttons = list(msg.buttons)
+            return
 
         twist = self.make_twist(msg)
         if self.mode == 'robot':

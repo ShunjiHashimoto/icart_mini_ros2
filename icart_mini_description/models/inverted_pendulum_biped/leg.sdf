@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="biped_leg">
+    <static>false</static>
+    <kinematic>true</kinematic>
+    <link name="leg">
+      <pose>0 0 0.35 0 0 0</pose>
+      <collision name="collision">
+        <geometry>
+          <cylinder>
+            <radius>0.045</radius>
+            <length>0.70</length>
+          </cylinder>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <cylinder>
+            <radius>0.045</radius>
+            <length>0.70</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.08 0.18 0.85 1</ambient>
+          <diffuse>0.08 0.18 0.85 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

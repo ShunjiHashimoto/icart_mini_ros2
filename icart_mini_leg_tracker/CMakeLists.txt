@@ -73,6 +73,7 @@ install(PROGRAMS
   scripts/led_status.py
   scripts/joystick_follow_me_teleop.py
   scripts/moving_leg_pair_controller.py
+  scripts/inverted_pendulum_biped_controller.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

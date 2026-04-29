@@ -1,27 +1,47 @@
 # icart_mini_ros2
-屋内外用の小型移動ロボットフレーム「[i-Cart mini](https://t-frog.com/products/icart_mini/)」向けの ROS 2 パッケージ群です。  
-<img src=.docs/imgs/icart_mini.png width=40%>  
+
+屋内外用の小型移動ロボットフレーム「[i-Cart mini](https://t-frog.com/products/icart_mini/)」向けの ROS 2 パッケージ群です。
+
+このリポジトリには、実機を動かすための bringup と、Gazebo + RViz 上で Follow me をデバッグするためのシミュレーション環境が含まれます。実機とシミュレーションでは起動手順が異なるため、この README では章を分けて説明します。
+
+<img src=.docs/imgs/icart_mini.png width=40%>
 <img src=.docs/imgs/icart_urdf.png width=38%> <img src=.docs/imgs/icart_rviz.png width=60%>
 
-## System Requirements
+## パッケージ構成
+
+| パッケージ | 役割 |
+| --- | --- |
+| `icart_mini_bringup` | 実機用の LiDAR、YP-Spur、ジョイスティック bringup |
+| `icart_mini_description` | URDF、Gazebo 用ロボットモデル、RViz 設定、シミュレーション world |
+| `icart_mini_leg_tracker` | LiDAR 点群から脚クラスタを追跡し、Follow me 用 `/cmd_vel` を生成 |
+| `icart_mini_ypspur_bridge` | `YP-Spur` と ROS 2 の橋渡し |
+| `docker` | 開発・シミュレーション実行用 Docker 環境 |
+
+## 動作環境
+
+### 実機
+
 - Hardware: Raspberry Pi 5 + i-Cart mini 実機
 - OS: Ubuntu 23.10
 - ROS 2: Humble Hawksbill
-- Docker (任意): 26.0.0 以降
-- LiDAR: Hokuyo [UST-10LX](https://www.hokuyo-aut.co.jp/search/single.php?serial=16&utm_source=google&utm_medium=cpc&utm_campaign=[P-MAX]&gad_source=1&gclid=Cj0KCQiAwtu9BhC8ARIsAI9JHam6cR3BVtNZ746VwLahng9sImtlVbThGx0BkbivMfSW7eK9brOBjaYaAjHhEALw_wcB#spec)
-- 電源: LONG 12V 鉛蓄電池 ×2（24V→5V 変換に DROK 090011_JPN を使用）
-- 駆動系: i-Cart mini 付属モータ & モータドライバ
+- LiDAR: Hokuyo UST-10LX
+- 駆動系: i-Cart mini 付属モータ、モータドライバ、YP-Spur
+- Joystick: Logitech F710
 
-## パッケージ構成
-- `icart_mini_bringup`: LiDAR、YP-Spur、ジョイスティックをまとめて起動する bringup ランチ
-- `icart_mini_description`: URDF / RViz 設定を提供するロボットモデルパッケージ
-- `icart_mini_leg_tracker`: LiDAR 点群から脚クラスタを追跡し `/cmd_vel` を生成するノード
-- `icart_mini_ypspur_bridge`: `YPSpur` と ROS 2 の橋渡し（`/cmd_vel` からの制御・オドメトリ生成）
-- `docker`: 開発・実行環境を統一するための Dockerfile / スクリプト
-- `sh`: 実機 bringup を Docker で起動・停止する補助スクリプト (`start_icart.sh`, `stop_icart.sh`, `auto_start.sh`)
+### シミュレーション
 
-## セットアップ
+- ROS 2: Humble Hawksbill
+- Gazebo: Gazebo Classic 11
+- RViz2
+- Docker: 26.0.0 以降を推奨
+- Joystick: Logitech F710
+
+Gazebo Classic 11 は 2025年1月に EOL になっていますが、このリポジトリでは ROS 2 Humble と `gazebo_ros_pkgs` との相性を優先し、現時点の Follow me シミュレーションでは Gazebo Classic を使用しています。
+
+## 共通セットアップ
+
 ### ワークスペース準備
+
 ```bash
 $ mkdir -p ~/icart_ws/src
 $ cd ~/icart_ws
@@ -30,146 +50,332 @@ $ vcs import src < src/icart_mini_ros2/ros2.repos
 ```
 リポジトリルートには依存パッケージの取得元をまとめた `ros2.repos` を同梱しています（`icart_mini_ros2`, `i-Cart`, `yp-spur`, `urg_node2`）。`vcs import` を使えば、このファイルに記載されたリビジョンで依存リポジトリを一括取得できます。
 
+### ビルド
+
+```bash
+cd ~/icart_ws
+colcon build --symlink-install
+source install/setup.bash
+```
+
+一部だけ再ビルドする場合:
+
+```bash
+colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker
+source install/setup.bash
+```
+
+ROS_DOMAIN_ID と CycloneDDS 設定を手動で合わせる場合:
+
+```bash
+export ROS_DOMAIN_ID=99
+export CYCLONEDDS_URI=$HOME/icart_ws/src/cyclonedds.xml
+```
+
+## Docker 環境
+
+シミュレーションは Docker 内での実行を前提にしています。`docker/run.sh` は host network、DISPLAY 共有、`/dev/input`、`/dev/bus/usb` のマウントを行います。
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2/docker
+docker build -t icart_mini_ros2:latest .
+./run.sh
+```
+
+コンテナに入ったら:
+
+```bash
+cd /root/icart_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker
+source install/setup.bash
+```
+
+別ターミナルから既存コンテナに入る場合:
+
+```bash
+docker exec -it icart_mini_ros2 bash
+cd /root/icart_ws
+source install/setup.bash
+```
+
+Gazebo GUI や RViz が表示されない場合は、ホスト側で X11 の許可を確認してください。
+
+```bash
+xhost +local:docker
+```
+
+Gazebo が `Address already in use` を出す場合は、前回の Gazebo が残っています。
+
+```bash
+pkill -f gzserver
+pkill -f gzclient
+```
+
+## Logitech F710
+
+実機・シミュレーションともに、Logitech F710 は背面スイッチを `X` にしてください。`D` モードではボタン番号が変わり、RT など別のボタンが Follow me 開始として認識されることがあります。
+
+コンテナ内で認識を確認します。
+
+```bash
+ros2 run joy joy_enumerate_devices
+```
+
+出力例:
+
+```text
+ID : GUID : GamePad : Mapped : Joystick Device Name
+0  : ...  : true    : true   : Logitech Gamepad F710
+```
+
+この `ID` が launch の `joy_device_id` です。Linux の `/dev/input/js1` の番号とは一致しない場合があります。
+
+単体確認:
+
+```bash
+ros2 run joy joy_node --ros-args --param device_id:=0
+ros2 topic echo /joy
+```
+
+Follow me のボタン割り当て:
+
+| 操作 | F710 | Button ID |
+| --- | --- | --- |
+| 非常停止 | RB | 5 |
+| 非常停止解除 | LB | 4 |
+| 追従開始 | Start | 7 |
+| 追従停止 | Back | 6 |
+
+## 実機 Bringup
+
+実機では YP-Spur がホストにインストール済みであることを前提にします。
+
 ### YP-Spur のビルド
-`icart_mini_ypspur_bridge` はホストに `YP-Spur` がインストール済みであることを前提とします。
 
 ```bash
-$ cd ~/icart_ws
-$ mkdir -p build
-$ cd build
-$ cmake ../src/yp-spur
-$ make
-$ sudo make install
-$ sudo ldconfig
+cd ~/icart_ws
+mkdir -p build
+cd build
+cmake ../src/yp-spur
+make
+sudo make install
+sudo ldconfig
 ```
 
-### colcon build
+### 実機起動
+
 ```bash
-$ cd ~/icart_ws
-$ colcon build --symlink-install
-$ source install/setup.bash
-# CYCLONEDDS の QoS 設定を共有する場合
-$ export CYCLONEDDS_URI=$HOME/icart_ws/src/cyclonedds.xml
-$ export ROS_DOMAIN_ID=99
+cd ~/icart_ws
+source install/setup.bash
+ros2 launch icart_mini_bringup icart_mini_bringup.launch.py
 ```
-特定パッケージのみを再ビルドしたい場合は `--packages-select icart_mini_leg_tracker` のように指定してください。
 
-## Docker を利用する場合
+この launch は以下を起動します。
+
+| 起動内容 | 主な役割 |
+| --- | --- |
+| `urg_node2` | Hokuyo UST-10LX から `/scan` を発行 |
+| `ypspur-coordinator` | YP-Spur の低レベル制御 |
+| `joy_node` | F710 の `/joy` を発行 |
+| `teleop_twist_joy` | ジョイスティックから `/cmd_vel` を発行 |
+| `icart_mini_ypspur_bridge` | `/cmd_vel` を YP-Spur に渡し、`/odom`、`/joint_states`、TF を発行 |
+
+Follow me ノードを起動します。
+
 ```bash
-$ cd ~/icart_ws/src/icart_mini_ros2/docker
-$ docker build -t icart_mini_ros2:latest .
-$ ./run.sh   # DISPLAY 共有・privileged・host network で起動
+ros2 run icart_mini_leg_tracker leg_cluster_tracking_node
 ```
-コンテナ起動後は `docker/before_bringup.sh` が `~/.bashrc` から自動で読み込まれ、`ROS_DOMAIN_ID=99` と `CYCLONEDDS_URI` が設定されます。`~/icart_ws` はホストと共有されるため、ホストでビルドした成果物をそのまま利用できます。
 
-## Quick Start
-### 1. 実機 Bringup
-LiDAR / 低レベル制御 / ジョイスティックを起動します。
+`leg_cluster_tracking_node` は `/scan` と `/joy` を購読します。Start ボタンを押すまでは LiDAR のクラスタ検出を行い、追従開始後に `/cmd_vel` を発行します。
+
+モデル表示だけ確認したい場合:
+
 ```bash
-$ ros2 launch icart_mini_bringup icart_mini_bringup.launch.py
+ros2 launch icart_mini_description icart_mini_display.launch.py
 ```
-このlaunchは以下を順に起動します。
-- `urg_node2`（/scan）
-- `/root/icart_ws/build/ypspur-coordinator`（`/dev/ttyACM0` を使用）
-- `ros2 run joy joy_node --ros-args --param device_id:=0`
-- `ros2 run teleop_twist_joy teleop_node --params-file icart_mini_ypspur_bridge/config/teleop_twist_joy_f710_params.yaml`
-- （3 秒遅延後）`ros2 run icart_mini_ypspur_bridge icart_mini_ypspur_bridge`
 
-### 2. モデル表示 (任意)
+## シミュレーション Follow me
+
+シミュレーションは Docker コンテナ内で実行します。Gazebo、RViz、icart モデル、LiDAR、倒立振子風の左右足円柱ターゲット、追従ノードをまとめて起動できます。
+
+### ジョイスティックで確認する
+
+通常の確認はこの launch を使います。
+
 ```bash
-$ ros2 launch icart_mini_description icart_mini_display.launch.py
+ros2 launch icart_mini_leg_tracker follow_me_biped_sim.launch.py
 ```
-`robot_state_publisher` と `rviz2`（事前設定済みレイアウト）を起動します。
 
-### 3. 脚クラスタ追跡ノード
+起動直後:
+
+- 左スティックで `icart_mini` を手動操作
+- 速度指令は `/cmd_vel`
+
+Start ボタン後:
+
+- Follow me 開始
+- 同じ左スティックで2本脚モデルを操作
+- 2本脚モデル操作の速度指令は `/person/cmd_vel`
+- ロボットは LiDAR の `/scan` から脚クラスタを追従
+
+Back ボタン後:
+
+- Follow me 停止
+- 操作対象が `icart_mini` に戻る
+
+障害物 world で確認する場合:
+
 ```bash
-$ ros2 run icart_mini_leg_tracker leg_cluster_tracking_node
+ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
 ```
-`Joy` の入力を監視し、追従開始ボタンが押されるまで LiDAR のみを監視します。追従開始後は `/cmd_vel` を出力し、`icart_mini_ypspur_bridge` 経由で駆動系を制御します。
 
-### フォローミーモードの操作 (Logitech F710 デフォルト設定)
-| 操作 | ボタン ID | 説明 |
-| ---- | --------- | ---- |
-| 非常停止 | 5 (RB) | `/cmd_vel` を即座に 0 にし、追従を停止 |
-| 非常停止解除 | 4 (LB) | 非常停止状態を解除 |
-| 追従開始 | 7 (Start) | 追従対象をリセットしフォローミー開始 |
-| 追従停止 | 6 (Back) | 追従状態を終了しターゲット情報をクリア |
+この launch はジョイスティック操作がデフォルトです。起動直後は `icart_mini` を操作し、Start ボタン後は左右足円柱のターゲットを操作します。スティック入力がゼロのときは足の踏み出しも停止します。
+launch 起動時点では Follow me もターゲット移動も開始しません。Start ボタンで Follow me とターゲット操作を開始します。
 
-### シミュレーション Follow me (ジョイスティック)
-Docker コンテナ内で Gazebo / RViz / 脚モデル / 追従ノード / `joy_node` をまとめて起動します。
-```bash
-$ ros2 launch icart_mini_leg_tracker follow_me_joy_sim.launch.py
-```
-起動直後はジョイスティックの左スティックで `icart_mini` を手動操縦し、Start ボタン (ID 7) で Follow me を開始します。開始後は同じスティック入力が脚モデル用の `/person/cmd_vel` に切り替わり、ロボットは LiDAR 上の脚クラスタを追従します。Back ボタン (ID 6) で追従を停止し、操作対象を `icart_mini` に戻します。非常停止 RB (ID 5) と非常停止解除 LB (ID 4) は実機と同じ割り当てです。
+### 代表的な launch 引数
+
+| launch | 主な用途 |
+| --- | --- |
+| `icart_mini_leg_tracker follow_me_biped_sim.launch.py` | 左右足を交互に踏み出す倒立振子風ターゲットでの Follow me |
+| `icart_mini_leg_tracker follow_me_obstacle_sim.launch.py` | 障害物 world での倒立振子風ターゲット Follow me |
+| `icart_mini_description icart_mini_display.launch.py` | RViz 上で icart モデルだけを確認 |
+
+| 引数 | 例 | 説明 |
+| --- | --- | --- |
+| `gui` | `gui:=false` | Gazebo GUI の有無 |
+| `use_rviz` | `use_rviz:=false` | RViz の有無 |
+| `use_joy` | `use_joy:=true` | ジョイスティック操作の有無。デフォルトは `true` |
+| `joy_device_id` | `joy_device_id:=0` | `joy_enumerate_devices` の ID |
+| `initial_x` | `initial_x:=0.5` | ターゲット初期 x 位置 |
+| `initial_y` | `initial_y:=0.0` | ターゲット初期 y 位置 |
+| `update_rate` | `update_rate:=60.0` | 倒立振子風ターゲットの Gazebo 更新周期 |
+| `step_length` | `step_length:=0.24` | 倒立振子風ターゲットの左右足の前後ステップ幅 |
+| `step_frequency` | `step_frequency:=1.2` | 倒立振子風ターゲットのステップ周期 |
+
+## シミュレーションのモデル
+
+Gazebo シミュレーションでは、リアルな人物モデルではなく円柱からなる簡易脚モデルを追従対象にします。`follow_me_biped_sim.launch.py` では左右の脚を別エンティティとして動かし、倒立振子モデルの簡易表現として左右足が交互に前後するようにします。Gazebo 上には倒立振子リンクは表示せず、LiDAR に見える円柱だけを動かします。
 
 ## ノード / トピック概要
-| ノード | パッケージ | 役割 | 購読 | 発行 |
-| ------ | ---------- | ---- | ---- | ---- |
-| `leg_cluster_tracking_node` | `icart_mini_leg_tracker` | LiDAR 点群から脚クラスタを検出し追従制御を生成 | `/scan`, `/joy` | `/cmd_vel`, `/leg_tracker/cluster_markers`, `/leg_tracker/cluster_centers`, `/leg_tracker/cluster_infos`, `/leg_tracker/person_marker`, `/leg_tracker/is_lost_target` |
-| `icart_mini_ypspur_bridge` | `icart_mini_ypspur_bridge` | `YPSpur` とのブリッジ（速度指令とオドメトリ） | `/cmd_vel` | `/odom`, `/joint_states`, TF (`odom` → `base_footprint`) |
-| `urg_node2` | `urg_node2` | Hokuyo UST-10LX ドライバ | - | `/scan` |
-| `teleop_node` | `teleop_twist_joy` | ジョイスティックから速度指令を生成（非常停止を含む） | `/joy` | `/cmd_vel` |
 
-## icart_mini_leg_tracker の処理パイプライン
-### Preprocessing (前処理)
-- LiDAR の生データを座標変換し、極端に近い点群を `MAX_NOISE_DISTANCE_THRESH` で除去
-- `MAX_SAMPLING_INTERVAL` 以内の点を間引いて計算量を削減
-- `MAX_CLUSTER_DISTANCE` を超える点はクラスタ対象から除外
+| ノード | 役割 | 購読 | 発行 |
+| --- | --- | --- | --- |
+| `leg_cluster_tracking_node` | LiDAR 点群から脚クラスタを検出し追従制御を生成 | `/scan`, `/joy`, `/follow_me/control` | `/cmd_vel`, `/leg_tracker/cluster_markers`, `/leg_tracker/cluster_centers`, `/leg_tracker/cluster_infos`, `/leg_tracker/person_marker`, `/leg_tracker/is_lost_target` |
+| `joystick_follow_me_teleop.py` | シミュレーション用に F710 の操作対象をロボットと2本脚モデルで切替 | `/joy` | `/cmd_vel`, `/person/cmd_vel`, `/person/control` |
+| `inverted_pendulum_biped_controller.py` | 左右足を交互に踏み出す倒立振子風ターゲットを移動 | `/person/cmd_vel`, `/person/control`, `/model_states` | `/person/motion_event` |
+| `icart_mini_ypspur_bridge` | 実機用 YP-Spur ブリッジ | `/cmd_vel` | `/odom`, `/joint_states`, TF |
+| `urg_node2` | 実機 LiDAR ドライバ | - | `/scan` |
 
-### Clustering (クラスタリング)
-- PCL の `KdTree` + `EuclideanClusterExtraction` を使用
-- `CLUSTER_TOLERANCE`、`MIN_CLUSTER_SIZE`、`MAX_CLUSTER_SIZE` でクラスタを選別
-- 各クラスタの重心を算出し追跡処理に渡す
+## icart_mini_leg_tracker の処理概要
 
-### Tracking (追跡)
-- 過去フレームの重心と `cluster_id_history_` を利用して ID を安定化
-- `LOST_CLUSTER_TIMEOUT` 以内であれば失われたクラスタを速度ベクトルから補間し再マッチ
-- `smoothAndFilterVelocities` で速度履歴を平滑化し、静止判定 (`STATIC_SPEED_THRESHOLD` / `STATIC_FRAME_LIMIT`)
+### Preprocessing
 
-### Following (追従)
-- 有効領域（前方 1.0 m × 横 ±0.4 m）内でターゲット候補を抽出
-- 既存ターゲットの継続可否を最小距離と移動量 (`MOVEMENT_THRESHOLD`) から判定
-- PID 制御（`KP_DIST`, `KI_DIST`, `KP_ANGLE`, `KI_ANGLE`）で前進・旋回速度を生成
+- LiDAR の生データを座標変換し、極端に近い点群を除去
+- 点群を間引いて計算量を削減
+- 遠すぎる点をクラスタ対象から除外
+
+### Clustering
+
+- PCL の `KdTree` と `EuclideanClusterExtraction` を使用
+- クラスタサイズと距離で脚候補を選別
+- 各クラスタの重心を算出
+
+### Tracking
+
+- 過去フレームの重心と ID 履歴からクラスタ ID を安定化
+- 一時的に見失ったクラスタを速度ベクトルから補間
+- 速度履歴を平滑化し、静止判定を行う
+
+### Following
+
+- 有効領域内でターゲット候補を抽出
+- 既存ターゲットの継続可否を距離と移動量から判定
+- PID 制御で前進・旋回速度を生成
 - 追従対象ロスト時は `/leg_tracker/is_lost_target` を通知
 
-### Visualization & Logging
-- `MarkerHelper` でクラスタ点群・中心・ターゲットを `MarkerArray` として発行
-- `ClusterInfoArray` でクラスタ ID・速度・静止判定を配信
-- `logs/cluster_tracking_log.csv` にクラスタ履歴と速度を蓄積（CSVLogger）
 <img src=.docs/imgs/clustering.png width=50%>
 
-## カスタムメッセージ
-- `ClusterInfo.msg`
-  - `int32 id`
-  - `geometry_msgs/Point center`
-  - `geometry_msgs/Vector3 velocity`
-  - `bool is_static`
-  - `bool is_target`
-- `ClusterInfoArray.msg`
-  - `ClusterInfo[] clusters`
+## Rosbag / デバッグ
 
-## Debug Tips
+代表的なトピックを記録します。
+
 ```bash
-# 代表的なトピックを rosbag 収集
-$ ros2 bag record /scan /tf /tf_static \
-    /leg_tracker/cluster_markers /leg_tracker/cluster_centers \
-    /leg_tracker/cluster_infos /leg_tracker/person_marker
-
-# LiDAR を記録した bag を再生（速度 0.5 倍、開始時一時停止）
-$ ros2 bag play my_bag --rate 0.5 --topics /scan --start-pause
-
-# ClusterInfo を CSV 出力
-$ ros2 topic echo /leg_tracker/cluster_infos --csv > cluster_infos.csv
+ros2 bag record /scan /tf /tf_static /odom /cmd_vel /joy \
+  /person/cmd_vel /person/control /person/motion_event \
+  /leg_tracker/cluster_markers /leg_tracker/cluster_centers \
+  /leg_tracker/cluster_infos /leg_tracker/person_marker \
+  /leg_tracker/is_lost_target
 ```
-ログファイルをリセットしたい場合は `logs/cluster_tracking_log.csv` を削除するか、ノード起動時に自動生成されるファイルを利用してください。
+
+LiDAR を記録した bag を再生して追跡ノードを確認する例:
+
+```bash
+ros2 bag play my_bag --rate 0.5 --topics /scan /tf /tf_static --start-paused
+ros2 run icart_mini_leg_tracker leg_cluster_tracking_node
+```
+
+ClusterInfo を CSV として保存する例:
+
+```bash
+ros2 topic echo /leg_tracker/cluster_infos --csv > cluster_infos.csv
+```
+
+ログファイルをリセットしたい場合は、`icart_mini_leg_tracker/csv/cluster_tracking_log.csv` を削除してください。ノード起動時に必要なログファイルは再生成されます。
+
+## トラブルシュート
+
+### `joy_enumerate_devices` に F710 が出ない
+
+- F710 の USB ドングルをホストに挿し直す
+- ホストで `ls /dev/input/js*` を確認する
+- コンテナを作り直す
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2/docker
+docker rm -f icart_mini_ros2
+./run.sh
+```
+
+### X モードでジョイスティック操作できない
+
+`/dev/input/js1` と `joy_device_id:=1` は同じ意味ではありません。コンテナ内で `joy_enumerate_devices` を実行し、表示された `ID` を `joy_device_id` に指定してください。
+
+### D モードで RT が追従開始になる
+
+F710 の `D` モードではボタン番号が README の割り当てと変わります。背面スイッチを `X` にして、`joy_node` または launch を再起動してください。
+
+### Gazebo が起動しない
+
+前回の Gazebo が残っている場合があります。
+
+```bash
+pkill -f gzserver
+pkill -f gzclient
+```
+
+`bind: Address already in use` が続く場合は、Gazebo master のプロセスが残っていないか確認してください。
+
+```bash
+ps aux | grep -E "gzserver|gzclient|ros2 launch" | grep -v grep
+```
+
+### CycloneDDS が `wlan0: does not match an available interface` を出す
+
+Docker 内で指定したネットワークインターフェース名が存在しない場合に出ます。コンテナ内のインターフェース名を確認し、`cyclonedds.xml` の設定を合わせてください。
+
+```bash
+ip addr
+```
 
 ## 依存パッケージ
+
 - [YP-Spur](https://github.com/openspur/yp-spur)
-  - 上記ビルド手順を参照し、`make install` まで実施
-  - 最新のyp-spurではなく、ros2.reposに記載されたバージョンをcloneする。
+  - 実機で使用
+  - `ros2.repos` に記載されたバージョンを使用
 - [urg_node2](https://github.com/ShunjiHashimoto/urg_node2)
-  - `colcon build --symlink-install --packages-select urg_node2`
+  - 実機 LiDAR で使用
 - [i-Cart モデルデータ](https://github.com/BND-tc/i-Cart)
   - `icart_mini_description` の URDF・パラメータで使用
 
-これらは `ros2.repos` に含まれているため `vcs import` で取得可能です。`apt` では `ros-humble-teleop-twist-joy`、`ros-humble-joy`、`ros-humble-pcl-ros` などを事前にインストールしておくとビルドがスムーズです。
+`apt` では `ros-humble-joy`、`ros-humble-teleop-twist-joy`、`ros-humble-pcl-ros`、`ros-humble-gazebo-ros-pkgs` などが必要です。Docker イメージを使う場合は Dockerfile 内でインストールされます。
