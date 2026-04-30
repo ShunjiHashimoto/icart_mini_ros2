@@ -9,3 +9,5 @@ TASK.md
 .codex/
 __pycache__/
 *.pyc
+*issue*.md
+*TASK*.md
