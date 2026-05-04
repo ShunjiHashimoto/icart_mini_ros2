@@ -12,10 +12,11 @@
   <xacro:property name="base_size_x" value="0.4"/>
   <xacro:property name="base_size_y" value="0.18"/>
   <xacro:property name="base_size_z" value="0.4"/>
-  <xacro:property name="base_collision_y" value="0.08"/>
-  <xacro:property name="base_collision_z" value="0.06"/>
-  <xacro:property name="base_collision_center_z" value="0.08"/>
   <xacro:property name="base_height" value="0.25"/>
+  <!-- Fortressでは脚・障害物との接触を再現するため、見た目の筐体寸法に合わせる。 -->
+  <xacro:property name="base_collision_y" value="${base_size_y}"/>
+  <xacro:property name="base_collision_z" value="${base_size_z}"/>
+  <xacro:property name="base_collision_center_z" value="${base_height}"/>
   <xacro:property name="wheel_height" value="${wheel_radius}"/>
   <xacro:property name="laser_x" value="0.15"/>
   <xacro:property name="laser_y" value="0.0"/>

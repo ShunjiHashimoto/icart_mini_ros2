@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <sdf version="1.6">
   <model name="biped_leg">
-    <static>false</static>
-    <kinematic>true</kinematic>
+    <!-- Fortressではset_poseで動かす脚をkinematicにすると接触でロボットを押し返さないため、静的なcollisionとして扱う。 -->
+    <static>true</static>
     <link name="leg">
       <pose>0 0 0.35 0 0 0</pose>
       <collision name="collision">
