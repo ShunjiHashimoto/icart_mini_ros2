@@ -1,0 +1,44 @@
+# Gazebo Fortress + ros_gz_bridge bridge configuration.
+#
+# ROS 2 Humble の ros_gz_bridge は Fortress 世代の Gazebo Transport 型として
+# ignition.msgs.* を使う。launch から parameter_bridge の config_file に
+# このYAMLを渡す。
+#
+# Gazebo Sim が出す frame_id は `icart_mini/odom` のようにモデル名で
+# スコープされるため、/scan と /odom は一度 raw topic に受ける。
+# Fortress frame relay が Classic 互換の frame_id に直して /scan / /odom を出す。
+
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "ignition.msgs.Clock"
+  direction: GZ_TO_ROS
+  lazy: false
+
+- ros_topic_name: "/fortress/scan_raw"
+  gz_topic_name: "/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "ignition.msgs.LaserScan"
+  direction: GZ_TO_ROS
+  lazy: false
+
+- ros_topic_name: "/cmd_vel"
+  gz_topic_name: "/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "ignition.msgs.Twist"
+  direction: ROS_TO_GZ
+  lazy: false
+
+- ros_topic_name: "/fortress/odom_raw"
+  gz_topic_name: "/model/icart_mini/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "ignition.msgs.Odometry"
+  direction: GZ_TO_ROS
+  lazy: false
+
+- ros_topic_name: "/joint_states"
+  gz_topic_name: "/joint_states"
+  ros_type_name: "sensor_msgs/msg/JointState"
+  gz_type_name: "ignition.msgs.Model"
+  direction: GZ_TO_ROS
+  lazy: false
