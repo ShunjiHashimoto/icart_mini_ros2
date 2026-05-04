@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y \
   ros-humble-sensor-msgs \
   ros-humble-xacro \
   ros-humble-gazebo-ros-pkgs \
+  ros-humble-ros-gz \
+  ros-humble-ros-gz-sim \
+  ros-humble-ros-gz-bridge \
   ros-humble-rviz2 \
   ros-humble-rmw-cyclonedds-cpp \
   ros-humble-geometry-msgs \
