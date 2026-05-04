@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration
@@ -25,6 +25,7 @@ def launch_setup(context, *args, **kwargs):
     world_name = LaunchConfiguration('world_name').perform(context)
     gui = LaunchConfiguration('gui').perform(context).strip().lower()
     gz_args = f"-r {world}" if gui in ('1', 'true', 'yes', 'on') else f"-r -s {world}"
+    pose_service = f'/world/{world_name}/set_pose'
 
     use_rviz = LaunchConfiguration('use_rviz')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -59,6 +60,21 @@ def launch_setup(context, *args, **kwargs):
             name='fortress_parameter_bridge',
             parameters=[{'config_file': bridge_config}],
             output='screen',
+        ),
+
+        TimerAction(
+            period=2.0,
+            actions=[
+                Node(
+                    package='ros_gz_bridge',
+                    executable='parameter_bridge',
+                    name='fortress_pose_service_bridge',
+                    arguments=[
+                        f'{pose_service}@ros_gz_interfaces/srv/SetEntityPose',
+                    ],
+                    output='screen',
+                ),
+            ],
         ),
 
         Node(
@@ -159,6 +175,7 @@ def launch_setup(context, *args, **kwargs):
                 'step_length': step_length,
                 'step_width': step_width,
                 'step_frequency': step_frequency,
+                'pose_service': pose_service,
             }],
         ),
 

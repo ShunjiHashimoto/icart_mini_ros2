@@ -281,7 +281,7 @@ Gazebo シミュレーションでは、リアルな人物モデルではなく�
 | --- | --- | --- | --- |
 | `leg_cluster_tracking_node` | LiDAR 点群から脚クラスタを検出し追従制御を生成 | `/scan`, `/joy`, `/follow_me/control` | `/cmd_vel`, `/leg_tracker/cluster_markers`, `/leg_tracker/cluster_centers`, `/leg_tracker/cluster_infos`, `/leg_tracker/person_marker`, `/leg_tracker/is_lost_target` |
 | `joystick_follow_me_teleop.py` | シミュレーション用に F710 の操作対象をロボットと2本脚モデルで切替 | `/joy` | `/cmd_vel`, `/person/cmd_vel`, `/person/control` |
-| `inverted_pendulum_biped_controller.py` | 左右足を交互に踏み出す倒立振子風ターゲットを移動 | `/person/cmd_vel`, `/person/control`, `/model_states` | `/person/motion_event` |
+| `inverted_pendulum_biped_controller.py` | 左右足を交互に踏み出す倒立振子風ターゲットを移動 | `/person/cmd_vel`, `/person/control`, `/world/<world_name>/set_pose` | `/person/motion_event` |
 | `icart_mini_ypspur_bridge` | 実機用 YP-Spur ブリッジ | `/cmd_vel` | `/odom`, `/joint_states`, TF |
 | `urg_node2` | 実機 LiDAR ドライバ | - | `/scan` |
 

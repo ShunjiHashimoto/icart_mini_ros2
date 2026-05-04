@@ -3,12 +3,12 @@ import math
 from typing import Optional
 
 import rclpy
-from gazebo_msgs.msg import EntityState
-from gazebo_msgs.msg import ModelStates
-from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Twist
+from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from ros_gz_interfaces.msg import Entity
+from ros_gz_interfaces.srv import SetEntityPose
 from std_msgs.msg import String
 
 
@@ -37,7 +37,9 @@ class InvertedPendulumBipedController(Node):
         self.direction_marker_name = self.declare_parameter(
             'direction_marker_name', 'biped_direction_marker'
         ).value
-        self.reference_frame = self.declare_parameter('reference_frame', 'world').value
+        self.pose_service = self.declare_parameter(
+            'pose_service', '/world/follow_me_empty/set_pose'
+        ).value
         self.path_mode = self.declare_parameter('path_mode', 'straight').value
         self.auto_start = as_bool(self.declare_parameter('auto_start', True).value)
         self.initial_x = float(self.declare_parameter('initial_x', 0.5).value)
@@ -52,6 +54,7 @@ class InvertedPendulumBipedController(Node):
         self.step_frequency = float(self.declare_parameter('step_frequency', 1.2).value)
         self.manual_timeout = float(self.declare_parameter('manual_timeout', 0.5).value)
         self.motion_epsilon = float(self.declare_parameter('motion_epsilon', 0.02).value)
+        self.startup_delay = float(self.declare_parameter('startup_delay', 1.0).value)
 
         self.x = self.initial_x
         self.y = self.initial_y
@@ -64,12 +67,10 @@ class InvertedPendulumBipedController(Node):
         self.last_cmd_time: Optional[rclpy.time.Time] = None
         self.manual_cmd = Twist()
         self.pending_requests = []
-        self.model_names = set()
+        self.start_time = self.get_clock().now()
+        self.next_failure_log_time = self.start_time
 
-        self.set_state_client = self.create_client(SetEntityState, '/set_entity_state')
-        self.model_states_subscriber = self.create_subscription(
-            ModelStates, '/model_states', self.model_states_callback, 10
-        )
+        self.set_pose_client = self.create_client(SetEntityPose, self.pose_service)
         self.cmd_subscriber = self.create_subscription(Twist, '/person/cmd_vel', self.cmd_callback, 10)
         self.control_subscriber = self.create_subscription(String, '/person/control', self.control_callback, 10)
         self.event_publisher = self.create_publisher(String, '/person/motion_event', 10)
@@ -80,11 +81,9 @@ class InvertedPendulumBipedController(Node):
         self.publish_event('started' if self.auto_start else 'paused')
         self.get_logger().info(
             'Inverted pendulum biped controller ready: '
-            f'left={self.left_leg_name}, right={self.right_leg_name}'
+            f'left={self.left_leg_name}, right={self.right_leg_name}, '
+            f'pose_service={self.pose_service}'
         )
-
-    def model_states_callback(self, msg: ModelStates):
-        self.model_names = set(msg.name)
 
     def cmd_callback(self, msg: Twist):
         self.manual_cmd = msg
@@ -129,18 +128,17 @@ class InvertedPendulumBipedController(Node):
         dt = max((now - self.last_time).nanoseconds * 1e-9, 0.0)
         self.last_time = now
 
-        self.pending_requests = [request for request in self.pending_requests if not request.done()]
+        self.collect_finished_requests(now)
         if self.pending_requests:
             return
 
-        if not self.set_state_client.service_is_ready():
-            self.set_state_client.wait_for_service(timeout_sec=0.0)
+        if not self.set_pose_client.service_is_ready():
+            self.set_pose_client.wait_for_service(timeout_sec=0.0)
             return
 
-        required = {self.left_leg_name, self.right_leg_name}
-        if self.direction_marker_name:
-            required.add(self.direction_marker_name)
-        if not required.issubset(self.model_names):
+        # Gazebo Sim では spawn と controller 起動が並行するため、初回だけ少し待つ。
+        # 待たないと entity 生成前の set_pose が失敗し、起動時ログが読みづらくなる。
+        if (now - self.start_time).nanoseconds * 1e-9 < self.startup_delay:
             return
 
         if not self.paused:
@@ -215,19 +213,39 @@ class InvertedPendulumBipedController(Node):
             )
 
     def call_set_state(self, name: str, x: float, y: float, z: float, yaw: float):
-        request = SetEntityState.Request()
-        request.state = EntityState()
-        request.state.name = name
-        request.state.reference_frame = self.reference_frame
-        request.state.pose.position.x = x
-        request.state.pose.position.y = y
-        request.state.pose.position.z = z
+        request = SetEntityPose.Request()
+        request.entity.name = name
+        request.entity.type = Entity.MODEL
+        request.pose.position.x = x
+        request.pose.position.y = y
+        request.pose.position.z = z
         quat = yaw_to_quaternion(yaw)
-        request.state.pose.orientation.x = quat['x']
-        request.state.pose.orientation.y = quat['y']
-        request.state.pose.orientation.z = quat['z']
-        request.state.pose.orientation.w = quat['w']
-        self.pending_requests.append(self.set_state_client.call_async(request))
+        request.pose.orientation.x = quat['x']
+        request.pose.orientation.y = quat['y']
+        request.pose.orientation.z = quat['z']
+        request.pose.orientation.w = quat['w']
+        self.pending_requests.append(self.set_pose_client.call_async(request))
+
+    def collect_finished_requests(self, now):
+        active_requests = []
+        for request in self.pending_requests:
+            if not request.done():
+                active_requests.append(request)
+                continue
+            try:
+                response = request.result()
+            except Exception as exc:
+                self.log_pose_failure(now, f'set_pose service call failed: {exc}')
+                continue
+            if not response.success:
+                self.log_pose_failure(now, 'set_pose service returned success=false')
+        self.pending_requests = active_requests
+
+    def log_pose_failure(self, now, message: str):
+        if now < self.next_failure_log_time:
+            return
+        self.get_logger().warn(message)
+        self.next_failure_log_time = now + Duration(seconds=2.0)
 
 
 def main():
