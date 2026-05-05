@@ -227,6 +227,9 @@
           <mean>0.0</mean>
           <stddev>0.01</stddev>
         </noise>
+        <!-- gpu_lidarはrendering geometryを見るため、Actor meshのvisualが/scanへ混ざる。
+             scan検証では専用bitを持つ脚プロキシ・障害物だけをLiDAR対象にする。 -->
+        <visibility_mask>536870912</visibility_mask>
       </ray>
     </sensor>
   </gazebo>

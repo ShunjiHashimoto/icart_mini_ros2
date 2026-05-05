@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <sdf version="1.9">
-  <model name="biped_leg">
-    <!-- Fortressではset_poseで動かす脚をkinematicにすると接触でロボットを押し返さないため、静的なcollisionとして扱う。 -->
+  <model name="biped_leg_hidden">
+    <!-- Fortressのgpu_lidarはrendering由来なので、visualを消すとscan対象が変わる。
+         GUI上では透明にしつつ、LiDAR用のrendering geometryとcollisionは残す。 -->
     <static>true</static>
     <link name="leg">
       <pose>0 0 0.35 0 0 0</pose>
@@ -14,8 +15,9 @@
         </geometry>
       </collision>
       <visual name="visual">
-        <!-- 0x20000000をLiDAR専用bitにし、GUI表示bitも残してデバッグ表示する。 -->
+        <!-- 0x20000000をLiDAR専用bitにし、透明でもgpu_lidarの検出対象に残す。 -->
         <visibility_flags>536870913</visibility_flags>
+        <transparency>1.0</transparency>
         <geometry>
           <cylinder>
             <radius>0.045</radius>
@@ -23,8 +25,8 @@
           </cylinder>
         </geometry>
         <material>
-          <ambient>0.08 0.18 0.85 1</ambient>
-          <diffuse>0.08 0.18 0.85 1</diffuse>
+          <ambient>0.08 0.18 0.85 0.0</ambient>
+          <diffuse>0.08 0.18 0.85 0.0</diffuse>
         </material>
       </visual>
     </link>

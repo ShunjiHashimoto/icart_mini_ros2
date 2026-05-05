@@ -77,6 +77,8 @@
           </geometry>
         </collision>
         <visual name="visual">
+          <!-- 0x20000000をLiDAR専用bitにし、Actor meshを除外しても障害物は/scanに残す。 -->
+          <visibility_flags>536870913</visibility_flags>
           <geometry>
             <box>
               <size>3.8 0.08 0.70</size>
@@ -102,6 +104,7 @@
           </geometry>
         </collision>
         <visual name="visual">
+          <visibility_flags>536870913</visibility_flags>
           <geometry>
             <box>
               <size>3.8 0.08 0.70</size>
@@ -127,6 +130,7 @@
           </geometry>
         </collision>
         <visual name="visual">
+          <visibility_flags>536870913</visibility_flags>
           <geometry>
             <box>
               <size>0.22 0.22 0.44</size>
@@ -153,6 +157,7 @@
           </geometry>
         </collision>
         <visual name="visual">
+          <visibility_flags>536870913</visibility_flags>
           <geometry>
             <cylinder>
               <radius>0.09</radius>
