@@ -61,7 +61,7 @@ source install/setup.bash
 一部だけ再ビルドする場合:
 
 ```bash
-colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker
+colcon build --symlink-install --packages-select gazebo_ros_actor_plugin icart_mini_description icart_mini_leg_tracker
 source install/setup.bash
 ```
 
@@ -95,7 +95,8 @@ Dockerfile には Fortress 版に必要な `ros_gz` / `ros_gz_sim` / `ros_gz_bri
 ```bash
 cd /root/icart_ws
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker
+vcs import src < src/ros2.repos
+colcon build --symlink-install --packages-select gazebo_ros_actor_plugin icart_mini_description icart_mini_leg_tracker
 source install/setup.bash
 ```
 
@@ -105,10 +106,22 @@ source install/setup.bash
 ros2 launch icart_mini_leg_tracker follow_me_biped_sim_fortress.launch.py
 ```
 
+実人物 Actor 版:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_actor_sim_fortress.launch.py
+```
+
 障害物あり:
 
 ```bash
 ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py
+```
+
+実人物 Actor 版の障害物 world:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py
 ```
 
 Classic 版で比較したい場合:
@@ -262,6 +275,13 @@ Back ボタン後:
 ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py
 ```
 
+実人物 Actor / 2足プロキシを切り替えて確認する場合:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_actor_sim_fortress.launch.py
+ros2 launch icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py
+```
+
 この launch はジョイスティック操作がデフォルトです。起動直後は `icart_mini` を操作し、Start ボタン後は左右足円柱のターゲットを操作します。スティック入力がゼロのときは足の踏み出しも停止します。
 launch 起動時点では Follow me もターゲット移動も開始しません。Start ボタンで Follow me とターゲット操作を開始します。
 
@@ -278,6 +298,8 @@ ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
 | --- | --- |
 | `icart_mini_leg_tracker follow_me_biped_sim_fortress.launch.py` | Fortress の空 world で、左右足を交互に踏み出す倒立振子風ターゲットを使った Follow me |
 | `icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py` | Fortress の障害物 world での倒立振子風ターゲット Follow me |
+| `icart_mini_leg_tracker follow_me_actor_sim_fortress.launch.py` | Fortress の空 world で、DoctorFemaleWalk Actor または左右脚プロキシを切り替える Follow me |
+| `icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py` | Fortress の障害物 world で、DoctorFemaleWalk Actor または左右脚プロキシを切り替える Follow me |
 | `icart_mini_leg_tracker follow_me_biped_sim.launch.py` | Classic 版の比較・ロールバック用 Follow me |
 | `icart_mini_leg_tracker follow_me_obstacle_sim.launch.py` | Classic 版の障害物 world 比較用 Follow me |
 | `icart_mini_description icart_mini_display.launch.py` | RViz 上で icart モデルだけを確認 |
@@ -288,8 +310,12 @@ ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
 | `use_rviz` | `use_rviz:=false` | RViz の有無 |
 | `use_joy` | `use_joy:=true` | ジョイスティック操作の有無。デフォルトは `true` |
 | `joy_device_id` | `joy_device_id:=0` | `joy_enumerate_devices` の ID |
-| `initial_x` | `initial_x:=0.5` | ターゲット初期 x 位置 |
+| `initial_x` | `initial_x:=0.9` | Actor 版のターゲット初期 x 位置。ロボットとの初期干渉を避けるため、従来の円柱のみの launch より前方に置く |
 | `initial_y` | `initial_y:=0.0` | ターゲット初期 y 位置 |
+| `scan_target_mode` | `scan_target_mode:=leg_proxy` | Actor 版 launch の LiDAR 検出対象。`leg_proxy` は左右脚プロキシのみ、`actor_mesh` は Actor のみ |
+| `actor_linear_scale` | `actor_linear_scale:=1.0` | Actor だけに掛ける直進速度倍率。左右脚プロキシの速度には影響しない |
+| `actor_angular_scale` | `actor_angular_scale:=1.0` | Actor だけに掛ける旋回速度倍率。左右脚プロキシの速度には影響しない |
+| `actor_pose_publish_rate` | `actor_pose_publish_rate:=30.0` | Actor pose の publish 周期 |
 | `update_rate` | `update_rate:=60.0` | 倒立振子風ターゲットの Gazebo 更新周期 |
 | `step_length` | `step_length:=0.24` | 倒立振子風ターゲットの左右足の前後ステップ幅 |
 | `step_frequency` | `step_frequency:=1.2` | 倒立振子風ターゲットのステップ周期 |
@@ -319,15 +345,23 @@ ros2 topic echo /leg_tracker/person_marker --once
 
 ## シミュレーションのモデル
 
-Gazebo シミュレーションでは、リアルな人物モデルではなく円柱からなる簡易脚モデルを追従対象にします。Fortress 版の `follow_me_biped_sim_fortress.launch.py` では左右の脚を別エンティティとして spawn し、`/world/<world_name>/set_pose` service 経由で位置を更新します。倒立振子モデルの簡易表現として左右足が交互に前後するようにし、Gazebo 上には倒立振子リンクは表示せず、LiDAR に見える円柱だけを動かします。
+Gazebo シミュレーションでは、LiDAR に安定して見える円柱脚モデルを追従対象にします。Fortress 版の `follow_me_biped_sim_fortress.launch.py` では左右の脚を別エンティティとして spawn し、`/world/<world_name>/set_pose` service 経由で位置を更新します。倒立振子モデルの簡易表現として左右足が交互に前後するようにし、Gazebo 上には倒立振子リンクは表示せず、LiDAR に見える円柱だけを動かします。
+
+Actor 版の `follow_me_actor_sim_fortress.launch.py` と `follow_me_actor_obstacle_sim_fortress.launch.py` は、`gazebo_ros_actor_plugin` の `DoctorFemaleWalk/model.sdf.xacro` を `xacro` で展開し、Gazebo entity 名 `person_actor` として `ros_gz_sim create -string` で spawn します。Actor は velocity mode で使い、`/person/cmd_vel` を `actor_cmd_vel_relay.py` でActor用にスケールしてから Gazebo 側 `/person_actor/cmd_vel` へ bridge します。Gazebo 側 `/person_actor/pose` は ROS 側 `/person/actor_pose` へ bridge します。
+
+Actor の速度感を調整したい場合は、`actor_linear_scale` と `actor_angular_scale` を指定します。デフォルトは `1.0` で、`/person/cmd_vel` をそのまま Actor 用 topic へ中継します。
+
+Actor 版の `scan_target_mode` は `leg_proxy` がデフォルトです。`leg_proxy` では既存同等の左右脚プロキシと方向マーカーだけを spawn し、`inverted_pendulum_biped_controller.py` が `/person/cmd_vel` と `/person/control` で脚プロキシを更新します。`actor_mesh` では左右脚プロキシとコントローラを起動せず、Actor メッシュだけを spawn します。同時に2つの追従対象が見えないよう、どちらのmodeでも片方だけを表示します。
 
 ## ノード / トピック概要
 
 | ノード | 役割 | 購読 | 発行 |
 | --- | --- | --- | --- |
 | `leg_cluster_tracking_node` | LiDAR 点群から脚クラスタを検出し追従制御を生成 | `/scan`, `/joy`, `/follow_me/control` | `/cmd_vel`, `/leg_tracker/cluster_markers`, `/leg_tracker/cluster_centers`, `/leg_tracker/cluster_infos`, `/leg_tracker/person_marker`, `/leg_tracker/is_lost_target` |
-| `joystick_follow_me_teleop.py` | シミュレーション用に F710 の操作対象をロボットと2本脚モデルで切替 | `/joy` | `/cmd_vel`, `/person/cmd_vel`, `/person/control` |
+| `joystick_follow_me_teleop.py` | シミュレーション用に F710 の操作対象をロボットと人物モデルで切替 | `/joy` | `/cmd_vel`, `/person/cmd_vel`, `/person/control` |
+| `actor_cmd_vel_relay.py` | Actorだけ速度感を補正するため、`/person/cmd_vel` をスケールしてActor用topicへ中継 | `/person/cmd_vel` | `/person_actor/cmd_vel` |
 | `inverted_pendulum_biped_controller.py` | 左右足を交互に踏み出す倒立振子風ターゲットを移動 | `/person/cmd_vel`, `/person/control`, `/world/<world_name>/set_pose` | `/person/motion_event` |
+| `actor_parameter_bridge` | Actor 操作用の ROS/Gazebo topic bridge | `/person_actor/cmd_vel`, `/person_actor/pose` | `/person_actor/cmd_vel`, `/person/actor_pose` |
 | `icart_mini_ypspur_bridge` | 実機用 YP-Spur ブリッジ | `/cmd_vel` | `/odom`, `/joint_states`, TF |
 | `urg_node2` | 実機 LiDAR ドライバ | - | `/scan` |
 
