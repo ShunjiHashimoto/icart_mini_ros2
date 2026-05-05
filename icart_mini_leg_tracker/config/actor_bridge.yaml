@@ -1,0 +1,16 @@
+# Gazebo Actor plugin の topic は Gazebo Transport 側で person_actor/* になる。
+# /person/cmd_vel は脚プロキシも購読するため、Actor用にはrelay後の /person_actor/cmd_vel をbridgeする。
+
+- ros_topic_name: "/person_actor/cmd_vel"
+  gz_topic_name: "/person_actor/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "ignition.msgs.Twist"
+  direction: ROS_TO_GZ
+  lazy: false
+
+- ros_topic_name: "/person/actor_pose"
+  gz_topic_name: "/person_actor/pose"
+  ros_type_name: "geometry_msgs/msg/Pose"
+  gz_type_name: "ignition.msgs.Pose"
+  direction: GZ_TO_ROS
+  lazy: false
