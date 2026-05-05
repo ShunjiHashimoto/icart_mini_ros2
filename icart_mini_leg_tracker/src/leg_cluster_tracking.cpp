@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+#include <cstddef>
 #include <limits>
 
 LegClusterTracking::LegClusterTracking() : 
@@ -24,6 +26,9 @@ LegClusterTracking::LegClusterTracking() :
     joy_subscriber_ = this->create_subscription<sensor_msgs::msg::Joy>(
         "/joy", rclcpp::QoS(10).best_effort(), std::bind(&LegClusterTracking::joyCallback, this, std::placeholders::_1)
     );
+    follow_control_subscriber_ = this->create_subscription<std_msgs::msg::String>(
+        "/follow_me/control", 10, std::bind(&LegClusterTracking::followControlCallback, this, std::placeholders::_1)
+    );
 
     cluster_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_markers", 10);
     center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_centers", 10);
@@ -41,29 +46,66 @@ LegClusterTracking::LegClusterTracking() :
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-    if (msg->buttons[EMERGENCY_BUTTON] == 1) {
-        RCLCPP_WARN(this->get_logger(), "非常停止");
-        stop_by_joystick_ = true;
+    auto is_pressed = [&msg](std::size_t index) {
+        return index < msg->buttons.size() && msg->buttons[index] == 1;
+    };
+
+    if (is_pressed(EMERGENCY_BUTTON)) {
+        setEmergencyStop(true, "/joy");
+    }
+    else if (is_pressed(UNLOCK_EMERGENCY_BUTTON)) {
+        setEmergencyStop(false, "/joy");
+    }
+    else if (is_pressed(FOLLOWME_START_BUTTON)) {
+        startFollowMe("/joy");
+    }
+    else if (is_pressed(FOLLOWME_STOP_BUTTON)) {
+        stopFollowMe("/joy");
+    }
+}
+
+void LegClusterTracking::followControlCallback(const std_msgs::msg::String::SharedPtr msg) {
+    std::string command = msg->data;
+    std::transform(command.begin(), command.end(), command.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (command == "start" || command == "follow_start" || command == "f") {
+        startFollowMe("/follow_me/control");
+    } else if (command == "stop" || command == "follow_stop" || command == "g") {
+        stopFollowMe("/follow_me/control");
+    } else if (command == "emergency_stop" || command == "estop" || command == "space") {
+        setEmergencyStop(true, "/follow_me/control");
+    } else if (command == "clear_emergency_stop" || command == "clear_estop" || command == "clear" || command == "c") {
+        setEmergencyStop(false, "/follow_me/control");
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Unknown follow control command: '%s'", msg->data.c_str());
+    }
+}
+
+void LegClusterTracking::startFollowMe(const std::string &source) {
+    resetFollowTarget();
+    start_followme_flag = true;
+    RCLCPP_WARN(this->get_logger(), "追従開始 (%s)", source.c_str());
+    publishLostState(false);
+}
+
+void LegClusterTracking::stopFollowMe(const std::string &source) {
+    start_followme_flag = false;
+    resetFollowTarget();
+    publishCmdVel(0.0, 0.0);
+    RCLCPP_WARN(this->get_logger(), "追従停止 (%s)", source.c_str());
+    publishLostState(true);
+}
+
+void LegClusterTracking::setEmergencyStop(bool enabled, const std::string &source) {
+    stop_by_joystick_ = enabled;
+    if (enabled) {
         publishCmdVel(0.0, 0.0);
         publishLostState(true);
-    }
-    else if (msg->buttons[UNLOCK_EMERGENCY_BUTTON] == 1) {
-        RCLCPP_WARN(this->get_logger(), "非常停止解除");
-        stop_by_joystick_ = false;
+        RCLCPP_WARN(this->get_logger(), "非常停止 (%s)", source.c_str());
+    } else {
         publishLostState(false);
-    }
-    else if (msg->buttons[FOLLOWME_START_BUTTON] == 1) {
-        resetFollowTarget();
-        start_followme_flag = true;
-        RCLCPP_WARN(this->get_logger(), "追従開始");
-        publishLostState(false);
-    }
-    else if (msg->buttons[FOLLOWME_STOP_BUTTON] == 1) {
-        start_followme_flag = false;
-        resetFollowTarget();
-        publishCmdVel(0.0, 0.0);
-        RCLCPP_WARN(this->get_logger(), "追従停止");
-        publishLostState(true);
+        RCLCPP_WARN(this->get_logger(), "非常停止解除 (%s)", source.c_str());
     }
 }
 
@@ -95,7 +137,6 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
     } else {
         trackClusters(cluster_centers);
         followTarget(cluster_centers);
-        std::cout << "========================================\n\n";
         publishClusterMarkers(points, clusters);
         publishMatchedClusterCenters(cluster_centers);
         publishClusterInfoMap();
@@ -307,8 +348,8 @@ void LegClusterTracking::calculateClusterVelocities(
 bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
     for (auto it = cluster_centers.begin(); it != cluster_centers.end(); ) {
         const auto &center = it->second;
-        // 正面0.6m以内かつ左右0.2m以内のクラスタのみ採用
-        if (!(center.x > 0 && center.x < 0.6 && fabs(center.y) < 0.2)) {
+        // 正面1.0m以内かつ左右0.5m以内のクラスタのみ採用
+        if (!(center.x > 0 && center.x < INITIAL_TARGET_MAX_X && fabs(center.y) < INITIAL_TARGET_MAX_ABS_Y)) {
             RCLCPP_INFO(this->get_logger(), "クラスタID %d は有効領域外のため除外", it->first);
             it = cluster_centers.erase(it);  // 条件を満たさないクラスタを削除
         } else {
@@ -426,19 +467,19 @@ void LegClusterTracking::matchPreviousClusters(
                 if (matched_id == -1 || lost_dist < min_distance) {
                     matched_id = lost_matched_id;  // ロストクラスタのIDを採用
                     min_distance = lost_dist;
-                    RCLCPP_INFO(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
+                    RCLCPP_DEBUG(this->get_logger(), "ロストクラスタID: %d | 距離: %.2f が優先されました", matched_id, lost_dist);
                 }
             }
         }
 
         if (matched_id == -1) {
             if (nearest_distance == std::numeric_limits<double>::max()) {
-                RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: N/A", current_id, matched_id);
+                RCLCPP_DEBUG(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: N/A", current_id, matched_id);
             } else {
-                RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f (未マッチ)", current_id, matched_id, nearest_distance);
+                RCLCPP_DEBUG(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f (未マッチ)", current_id, matched_id, nearest_distance);
             }
         } else {
-            RCLCPP_INFO(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
+            RCLCPP_DEBUG(this->get_logger(), "現在のクラスタID: %d | 前回のクラスタID: %d | 距離: %.3f", current_id, matched_id, min_distance);
         }
 
         // マッチしたクラスタIDをマッピング、なければ新規付与
@@ -863,7 +904,9 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     double angular_velocity = (KP_ANGLE * error_angle) + (KI_ANGLE * integral_angle);
     cmd_msg.linear.x = std::clamp(linear_velocity, MIN_SPEED, MAX_SPEED);
     cmd_msg.angular.z = std::clamp(angular_velocity, -MAX_TURN_SPEED, MAX_TURN_SPEED);
-    RCLCPP_INFO(this->get_logger(), "直進速度: %.2f, 回転速度: %.2f", linear_velocity, angular_velocity);
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "直進速度: %.2f, 回転速度: %.2f", linear_velocity, angular_velocity);
     // if(abs(error_angle) > M_PI/4) { // BLDC
     if(abs(error_angle) > M_PI/4) { // icart
         cmd_msg.linear.x = 0.0; //　対象との角度が大きい場合は旋回を優先する

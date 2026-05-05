@@ -15,10 +15,13 @@ if [ ${#CMD[@]} -eq 0 ]; then
 fi
 
 docker run --rm \
-    --env DISPLAY=localhost:11.0 \
+    -it \
+    --env DISPLAY=${DISPLAY} \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v ~/.Xauthority:/root/.Xauthority:ro \
     --volume="${HOME}/icart_ws:/root/icart_ws" \
+    --volume="/dev/input:/dev/input" \
+    --volume="/dev/bus/usb:/dev/bus/usb" \
     --name=$CONTAINER_NAME \
     -e TZ=Asia/Tokyo \
     --privileged \

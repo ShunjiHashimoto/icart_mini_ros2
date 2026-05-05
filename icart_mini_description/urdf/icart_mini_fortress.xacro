@@ -1,0 +1,264 @@
+<?xml version="1.0"?>
+<robot name="icart_mini" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:property name="PI" value="3.1415926535897931"/>
+  <xacro:property name="wheel_radius" value="0.0725"/>
+  <xacro:property name="wheel_diameter" value="${2.0 * wheel_radius}"/>
+  <xacro:property name="wheel_thickness" value="0.03"/>
+  <xacro:property name="wheel_separation" value="0.2"/>
+  <xacro:property name="caster_radius" value="0.05"/>
+  <xacro:property name="caster_thickness" value="0.03"/>
+  <xacro:property name="caster_offset_x" value="0.19"/>
+  <xacro:property name="caster_height" value="${caster_radius}"/>
+  <xacro:property name="base_size_x" value="0.4"/>
+  <xacro:property name="base_size_y" value="0.18"/>
+  <xacro:property name="base_size_z" value="0.4"/>
+  <xacro:property name="base_height" value="0.25"/>
+  <!-- Fortressでは脚・障害物との接触を再現するため、見た目の筐体寸法に合わせる。 -->
+  <xacro:property name="base_collision_y" value="${base_size_y}"/>
+  <xacro:property name="base_collision_z" value="${base_size_z}"/>
+  <xacro:property name="base_collision_center_z" value="${base_height}"/>
+  <xacro:property name="wheel_height" value="${wheel_radius}"/>
+  <xacro:property name="laser_x" value="0.15"/>
+  <xacro:property name="laser_y" value="0.0"/>
+  <xacro:property name="laser_z" value="0.18"/>
+
+  <xacro:macro name="box_inertia" params="mass x y z">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (y*y + z*z) / 12.0}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${mass * (x*x + z*z) / 12.0}"
+        iyz="0.0"
+        izz="${mass * (x*x + y*y) / 12.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="cylinder_inertia_z" params="mass radius length">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (3.0 * radius * radius + length * length) / 12.0}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${mass * (3.0 * radius * radius + length * length) / 12.0}"
+        iyz="0.0"
+        izz="${mass * radius * radius / 2.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="caster_wheel" params="prefix x">
+    <joint name="${prefix}_caster_joint" type="continuous">
+      <origin xyz="${x} 0 ${caster_height}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.01" friction="0.0"/>
+      <parent link="base_link"/>
+      <child link="${prefix}_caster_wheel"/>
+    </joint>
+
+    <link name="${prefix}_caster_wheel">
+      <xacro:cylinder_inertia_z mass="0.2" radius="${caster_radius}" length="${caster_thickness}"/>
+      <visual>
+        <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+        <geometry>
+          <cylinder length="${caster_thickness}" radius="${caster_radius}"/>
+        </geometry>
+        <material name="dark_gray">
+          <color rgba="0.05 0.05 0.05 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <geometry>
+          <sphere radius="${caster_radius}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <gazebo reference="${prefix}_caster_wheel">
+      <material>Gazebo/DarkGrey</material>
+      <mu1>0.05</mu1>
+      <mu2>0.05</mu2>
+    </gazebo>
+  </xacro:macro>
+
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+  </joint>
+
+  <link name="base_link">
+    <xacro:box_inertia mass="12.0" x="${base_size_x}" y="${base_size_y}" z="${base_size_z}"/>
+    <visual>
+      <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_size_x} ${base_size_y} ${base_size_z}"/>
+      </geometry>
+      <material name="white">
+        <color rgba="1.0 1.0 1.0 0.5"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${base_collision_center_z}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_size_x} ${base_collision_y} ${base_collision_z}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint type="continuous" name="left_wheel_joint">
+    <axis xyz="0 0 1"/>
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+    <origin rpy="-${PI/2} 0 0" xyz="0 ${wheel_separation/2} ${wheel_height}"/>
+  </joint>
+
+  <link name="left_wheel">
+    <xacro:cylinder_inertia_z mass="0.5" radius="${wheel_radius}" length="${wheel_thickness}"/>
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+      </geometry>
+      <material name="gray">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint type="continuous" name="right_wheel_joint">
+    <axis xyz="0 0 1"/>
+    <parent link="base_link"/>
+    <child link="right_wheel"/>
+    <origin rpy="-${PI/2} 0 0" xyz="0 -${wheel_separation/2} ${wheel_height}"/>
+  </joint>
+
+  <link name="right_wheel">
+    <xacro:cylinder_inertia_z mass="0.5" radius="${wheel_radius}" length="${wheel_thickness}"/>
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+      </geometry>
+      <material name="gray">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <xacro:caster_wheel prefix="front" x="${caster_offset_x}"/>
+  <xacro:caster_wheel prefix="rear" x="-${caster_offset_x}"/>
+
+  <joint name="scan_joint" type="fixed">
+    <origin xyz="${laser_x} ${laser_y} ${laser_z}" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="laser"/>
+  </joint>
+
+  <link name="laser">
+    <xacro:box_inertia mass="0.2" x="0.1" y="0.1" z="0.1"/>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 0.5"/>
+      </material>
+    </visual>
+  </link>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/White</material>
+  </gazebo>
+
+  <gazebo reference="left_wheel">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+
+  <gazebo reference="right_wheel">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+
+  <gazebo reference="laser">
+    <material>Gazebo/Red</material>
+    <sensor name="ust_10lx_sim" type="gpu_lidar">
+      <topic>scan</topic>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>40.0</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>1081</samples>
+            <resolution>1</resolution>
+            <min_angle>-2.35619449</min_angle>
+            <max_angle>2.35619449</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>1</samples>
+            <resolution>1</resolution>
+            <min_angle>0.0</min_angle>
+            <max_angle>0.0</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.06</min>
+          <max>10.0</max>
+          <resolution>0.001</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+        <!-- gpu_lidarはcollisionではなくvisualを見て/scanを作る。
+             0x20000000をLiDAR専用bitにし、同じbitを持つvisualだけを検出対象にする。 -->
+        <visibility_mask>536870912</visibility_mask>
+      </ray>
+    </sensor>
+  </gazebo>
+
+  <gazebo>
+    <plugin filename="libignition-gazebo-joint-state-publisher-system.so"
+            name="ignition::gazebo::systems::JointStatePublisher">
+      <update_rate>50.0</update_rate>
+      <topic>joint_states</topic>
+      <joint_name>left_wheel_joint</joint_name>
+      <joint_name>right_wheel_joint</joint_name>
+      <joint_name>front_caster_joint</joint_name>
+      <joint_name>rear_caster_joint</joint_name>
+    </plugin>
+
+    <plugin filename="libignition-gazebo-diff-drive-system.so"
+            name="ignition::gazebo::systems::DiffDrive">
+      <update_rate>50.0</update_rate>
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+      <wheel_separation>${wheel_separation}</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
+      <max_wheel_torque>20.0</max_wheel_torque>
+      <max_wheel_acceleration>2.0</max_wheel_acceleration>
+      <odom_publish_frequency>50.0</odom_publish_frequency>
+      <topic>cmd_vel</topic>
+      <odometry_topic>odom</odometry_topic>
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+    </plugin>
+  </gazebo>
+</robot>

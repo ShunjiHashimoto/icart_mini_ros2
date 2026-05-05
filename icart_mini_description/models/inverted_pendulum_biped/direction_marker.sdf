@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="biped_direction_marker">
+    <!-- 表示専用マーカは物理応答を不要とし、Fortressで重力に沈まないよう静的モデルとして扱う。 -->
+    <static>true</static>
+    <link name="arrow">
+      <visual name="shaft">
+        <!-- 表示専用マーカなのでLiDAR専用bitは付けず、/scanに混ざらないようにする。 -->
+        <visibility_flags>1</visibility_flags>
+        <pose>0.10 0 0.035 0 1.57079632679 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.018</radius>
+            <length>0.20</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>1.0 0.78 0.05 1</ambient>
+          <diffuse>1.0 0.78 0.05 1</diffuse>
+          <specular>0.2 0.2 0.1 1</specular>
+        </material>
+      </visual>
+      <visual name="head">
+        <!-- 表示専用マーカなのでLiDAR専用bitは付けず、/scanに混ざらないようにする。 -->
+        <visibility_flags>1</visibility_flags>
+        <pose>0.24 0 0.035 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.09 0.10 0.045</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1.0 0.45 0.0 1</ambient>
+          <diffuse>1.0 0.45 0.0 1</diffuse>
+          <specular>0.2 0.1 0.0 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

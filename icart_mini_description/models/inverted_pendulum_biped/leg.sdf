@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="biped_leg">
+    <!-- Fortressではset_poseで動かす脚をkinematicにすると接触でロボットを押し返さないため、静的なcollisionとして扱う。 -->
+    <static>true</static>
+    <link name="leg">
+      <pose>0 0 0.35 0 0 0</pose>
+      <collision name="collision">
+        <geometry>
+          <cylinder>
+            <radius>0.045</radius>
+            <length>0.70</length>
+          </cylinder>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <!-- 536870913 = GUI表示bit(1) + LiDAR専用bit(0x20000000)。
+             デバッグ用の脚円柱はGazebo GUIにも/scanにも出す。 -->
+        <visibility_flags>536870913</visibility_flags>
+        <geometry>
+          <cylinder>
+            <radius>0.045</radius>
+            <length>0.70</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.08 0.18 0.85 1</ambient>
+          <diffuse>0.08 0.18 0.85 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

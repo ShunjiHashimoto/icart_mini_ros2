@@ -71,7 +71,20 @@ install(TARGETS leg_cluster_tracking_node
 
 install(PROGRAMS
   scripts/led_status.py
+  scripts/joystick_follow_me_teleop.py
+  scripts/fortress_frame_relay.py
+  scripts/moving_leg_pair_controller.py
+  scripts/inverted_pendulum_biped_controller.py
+  scripts/record_follow_me_bag.sh
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
