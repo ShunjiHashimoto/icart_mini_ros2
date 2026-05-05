@@ -312,7 +312,7 @@ ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
 | `joy_device_id` | `joy_device_id:=0` | `joy_enumerate_devices` の ID |
 | `initial_x` | `initial_x:=0.9` | Actor 版のターゲット初期 x 位置。ロボットとの初期干渉を避けるため、従来の円柱のみの launch より前方に置く |
 | `initial_y` | `initial_y:=0.0` | ターゲット初期 y 位置 |
-| `scan_target_mode` | `scan_target_mode:=leg_proxy` | Actor 版 launch の LiDAR 検出対象。`leg_proxy` は左右脚プロキシのみ、`actor_mesh` は Actor のみ |
+| `scan_target_mode` | `scan_target_mode:=actor_proxy` | Actor 版 launch の LiDAR 検出対象。`actor_proxy` は Actor と同期脚プロキシ、`leg_proxy` は左右脚プロキシのみ |
 | `actor_linear_scale` | `actor_linear_scale:=1.0` | Actor だけに掛ける直進速度倍率。左右脚プロキシの速度には影響しない |
 | `actor_angular_scale` | `actor_angular_scale:=1.0` | Actor だけに掛ける旋回速度倍率。左右脚プロキシの速度には影響しない |
 | `actor_pose_publish_rate` | `actor_pose_publish_rate:=30.0` | Actor pose の publish 周期 |
@@ -351,7 +351,7 @@ Actor 版の `follow_me_actor_sim_fortress.launch.py` と `follow_me_actor_obsta
 
 Actor の速度感を調整したい場合は、`actor_linear_scale` と `actor_angular_scale` を指定します。デフォルトは `1.0` で、`/person/cmd_vel` をそのまま Actor 用 topic へ中継します。
 
-Actor 版の `scan_target_mode` は `leg_proxy` がデフォルトです。`leg_proxy` では既存同等の左右脚プロキシと方向マーカーだけを spawn し、`inverted_pendulum_biped_controller.py` が `/person/cmd_vel` と `/person/control` で脚プロキシを更新します。`actor_mesh` では左右脚プロキシとコントローラを起動せず、Actor メッシュだけを spawn します。同時に2つの追従対象が見えないよう、どちらのmodeでも片方だけを表示します。
+Actor 版の `scan_target_mode` は `actor_proxy` がデフォルトです。`actor_proxy` では DoctorFemaleWalk Actor と左右脚プロキシを同時に spawn し、Actor plugin 内で DAE 由来の足 pose に脚プロキシを同期します。`leg_proxy` では既存同等の左右脚プロキシと方向マーカーだけを spawn し、`inverted_pendulum_biped_controller.py` が `/person/cmd_vel` と `/person/control` で脚プロキシを更新します。
 
 ## ノード / トピック概要
 
