@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y \
   ros-humble-urg-node \
   ros-humble-sensor-msgs \
   ros-humble-xacro \
-  ros-humble-gazebo-ros-pkgs \
   ros-humble-ros-gz \
   ros-humble-ros-gz-sim \
   ros-humble-ros-gz-bridge \
@@ -52,8 +51,6 @@ RUN apt-get update && apt-get install -y \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV RMW_IMPLEMENTATION rmw_cyclonedds_cpp
-ENV GAZEBO_SUPPRESS_EOL_WARNING 1
-
 # Install pip packages
 # pip install numpy==1.24.4
 RUN pip install --no-cache-dir \

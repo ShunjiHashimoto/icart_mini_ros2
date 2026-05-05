@@ -6,7 +6,7 @@
 #
 # Gazebo Sim が出す frame_id は `icart_mini/odom` のようにモデル名で
 # スコープされるため、/scan と /odom は一度 raw topic に受ける。
-# Fortress frame relay が Classic 互換の frame_id に直して /scan / /odom を出す。
+# Fortress frame relay が既存ノード向けの frame_id に直して /scan / /odom を出す。
 
 - ros_topic_name: "/clock"
   gz_topic_name: "/clock"

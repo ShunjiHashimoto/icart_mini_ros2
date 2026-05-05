@@ -24,7 +24,6 @@ docker run --rm \
     --volume="/dev/bus/usb:/dev/bus/usb" \
     --name=$CONTAINER_NAME \
     -e TZ=Asia/Tokyo \
-    -e GAZEBO_SUPPRESS_EOL_WARNING=1 \
     --privileged \
     --net=host \
     $DOCKER_IMAGE \

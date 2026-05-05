@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Gazebo Fortress 移行中だけ使う frame 互換 relay。
+"""Gazebo Fortress の scoped frame_id を既存ノード向けに整える relay。
 
 Gazebo Fortress が出す `icart_mini/odom` などのスコープ付き frame を、
-既存の Gazebo Classic 前提の `odom` / `base_footprint` / `laser` に直して
+追従ノードやRVizが前提とする `odom` / `base_footprint` / `laser` に直して
 RViz と既存ノードから同じ名前で見えるようにする。
-
-Fortress への完全移行で frame 設計を一本化できたら、このスクリプト、
-launch からの起動、bridge の raw topic 設定は削除予定。
 """
 
 import copy

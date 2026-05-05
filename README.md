@@ -31,12 +31,10 @@
 ### シミュレーション
 
 - ROS 2: Humble Hawksbill
-- Gazebo: Gazebo Fortress, Gazebo Classic 11
+- Gazebo: Gazebo Fortress
 - RViz2
 - Docker: 26.0.0 以降を推奨
 - Joystick: Logitech F710
-
-Gazebo Classic 11 は 2025年1月に EOL になっています。Follow me シミュレーションは Fortress 版への移行中で、通常の確認では Fortress 版 launch を使います。Classic 版 launch は移行期間中の比較・ロールバック用として残しています。
 
 ## 共通セットアップ
 
@@ -88,7 +86,7 @@ docker build -t icart_mini_ros2:latest .
 ./run.sh
 ```
 
-Dockerfile には Fortress 版に必要な `ros_gz` / `ros_gz_sim` / `ros_gz_bridge` と、移行期間中の Classic 比較に使う `gazebo_ros_pkgs` の両方を含めています。
+Dockerfile には Fortress 版に必要な `ros_gz` / `ros_gz_sim` / `ros_gz_bridge` を含めています。
 
 コンテナに入ったら:
 
@@ -124,13 +122,6 @@ ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py
 ros2 launch icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py
 ```
 
-Classic 版で比較したい場合:
-
-```bash
-ros2 launch icart_mini_leg_tracker follow_me_biped_sim.launch.py
-ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
-```
-
 別ターミナルから既存コンテナに入る場合:
 
 ```bash
@@ -151,10 +142,6 @@ Gazebo が `Address already in use` を出す場合は、前回の Gazebo が残
 # Fortress
 pkill -f "gz sim"
 pkill -f "ign gazebo"
-
-# Classic
-pkill -f gzserver
-pkill -f gzclient
 ```
 
 ## Logitech F710
@@ -285,13 +272,6 @@ ros2 launch icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.
 この launch はジョイスティック操作がデフォルトです。起動直後は `icart_mini` を操作し、Start ボタン後は左右足円柱のターゲットを操作します。スティック入力がゼロのときは足の踏み出しも停止します。
 launch 起動時点では Follow me もターゲット移動も開始しません。Start ボタンで Follow me とターゲット操作を開始します。
 
-Classic 版 launch は Gazebo Classic との差分確認やロールバック用に残しています。新しい確認や修正は Fortress 版を優先してください。
-
-```bash
-ros2 launch icart_mini_leg_tracker follow_me_biped_sim.launch.py
-ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
-```
-
 ### 代表的な launch 引数
 
 | launch | 主な用途 |
@@ -300,8 +280,6 @@ ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim.launch.py
 | `icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py` | Fortress の障害物 world での倒立振子風ターゲット Follow me |
 | `icart_mini_leg_tracker follow_me_actor_sim_fortress.launch.py` | Fortress の空 world で、DoctorFemaleWalk Actor または左右脚プロキシを切り替える Follow me |
 | `icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py` | Fortress の障害物 world で、DoctorFemaleWalk Actor または左右脚プロキシを切り替える Follow me |
-| `icart_mini_leg_tracker follow_me_biped_sim.launch.py` | Classic 版の比較・ロールバック用 Follow me |
-| `icart_mini_leg_tracker follow_me_obstacle_sim.launch.py` | Classic 版の障害物 world 比較用 Follow me |
 | `icart_mini_description icart_mini_display.launch.py` | RViz 上で icart モデルだけを確認 |
 
 | 引数 | 例 | 説明 |
@@ -487,16 +465,12 @@ F710 の `D` モードではボタン番号が README の割り当てと変わ�
 # Fortress
 pkill -f "gz sim"
 pkill -f "ign gazebo"
-
-# Classic
-pkill -f gzserver
-pkill -f gzclient
 ```
 
 `bind: Address already in use` が続く場合は、Gazebo master のプロセスが残っていないか確認してください。
 
 ```bash
-ps aux | grep -E "gz sim|ign gazebo|gzserver|gzclient|ros2 launch" | grep -v grep
+ps aux | grep -E "gz sim|ign gazebo|ros2 launch" | grep -v grep
 ```
 
 ### CycloneDDS が `wlan0: does not match an available interface` を出す
@@ -517,4 +491,4 @@ ip addr
 - [i-Cart モデルデータ](https://github.com/BND-tc/i-Cart)
   - `icart_mini_description` の URDF・パラメータで使用
 
-`apt` では `ros-humble-joy`、`ros-humble-teleop-twist-joy`、`ros-humble-pcl-ros`、Fortress 版に必要な `ros-humble-ros-gz` / `ros-humble-ros-gz-sim` / `ros-humble-ros-gz-bridge`、Classic 版比較用の `ros-humble-gazebo-ros-pkgs` などが必要です。Docker イメージを使う場合は Dockerfile 内でインストールされます。
+`apt` では `ros-humble-joy`、`ros-humble-teleop-twist-joy`、`ros-humble-pcl-ros`、Fortress 版に必要な `ros-humble-ros-gz` / `ros-humble-ros-gz-sim` / `ros-humble-ros-gz-bridge` などが必要です。Docker イメージを使う場合は Dockerfile 内でインストールされます。
