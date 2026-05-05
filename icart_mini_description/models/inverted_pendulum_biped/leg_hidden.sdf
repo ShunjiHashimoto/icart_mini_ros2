@@ -15,7 +15,8 @@
         </geometry>
       </collision>
       <visual name="visual">
-        <!-- 0x20000000をLiDAR専用bitにし、透明でもgpu_lidarの検出対象に残す。 -->
+        <!-- 536870913 = GUI表示bit(1) + LiDAR専用bit(0x20000000)。
+             visualを消すとgpu_lidarからも消えるため、透明化だけして/scanには残す。 -->
         <visibility_flags>536870913</visibility_flags>
         <transparency>1.0</transparency>
         <geometry>

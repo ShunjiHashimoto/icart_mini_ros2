@@ -14,7 +14,8 @@
         </geometry>
       </collision>
       <visual name="visual">
-        <!-- 0x20000000をLiDAR専用bitにし、GUI表示bitも残してデバッグ表示する。 -->
+        <!-- 536870913 = GUI表示bit(1) + LiDAR専用bit(0x20000000)。
+             デバッグ用の脚円柱はGazebo GUIにも/scanにも出す。 -->
         <visibility_flags>536870913</visibility_flags>
         <geometry>
           <cylinder>

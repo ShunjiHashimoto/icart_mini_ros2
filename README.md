@@ -353,6 +353,14 @@ Actor の速度感を調整したい場合は、`actor_linear_scale` と `actor_
 
 Actor 版の `scan_target_mode` は `actor_proxy` がデフォルトです。`actor_proxy` では DoctorFemaleWalk Actor と左右脚プロキシを同時に spawn し、Actor plugin 内で DAE 由来の足 pose に脚プロキシを同期します。`leg_proxy` では既存同等の左右脚プロキシと方向マーカーだけを spawn し、`inverted_pendulum_biped_controller.py` が `/person/cmd_vel` と `/person/control` で脚プロキシを更新します。
 
+### Fortress の LiDAR visibility 設定
+
+Fortress の `gpu_lidar` は collision ではなく rendering geometry、つまり SDF の `visual` を見て `/scan` を生成します。そのため、Actor mesh の visual がそのまま LiDAR に入ると、脚プロキシと Actor 本体の scan が重複します。
+
+この重複を避けるため、`icart_mini_fortress.xacro` の LiDAR sensor に `visibility_mask=536870912` を設定し、脚プロキシと障害物の visual だけに同じ bit を含む `visibility_flags=536870913` を設定しています。`536870913` は `536870912 + 1` で、`536870912` が LiDAR 用 bit、`1` が Gazebo GUI の通常表示 bit です。
+
+`leg_hidden.sdf` は Gazebo GUI 上では透明に見せたい一方で、collision と LiDAR 検出は残したい脚プロキシです。visual を削除すると `gpu_lidar` からも消えるため、`transparency=1.0` で透明化しつつ `visibility_flags=536870913` を残しています。RViz はこの値を直接読まず、Gazebo が生成した `/scan` を表示するだけです。
+
 ## ノード / トピック概要
 
 | ノード | 役割 | 購読 | 発行 |
