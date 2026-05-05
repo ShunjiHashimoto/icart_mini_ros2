@@ -256,9 +256,13 @@ def main():
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        try:
+            node.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
+        except KeyboardInterrupt:
+            # 終了処理中に追加のCtrl+Cが入っても、不要なtracebackを出さずに終了する。
+            pass
 
 
 if __name__ == '__main__':
