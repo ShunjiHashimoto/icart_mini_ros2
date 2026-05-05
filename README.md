@@ -47,7 +47,7 @@ $ cd ~/icart_ws
 # 本リポジトリを src/ に配置した状態で依存パッケージを取得
 $ vcs import src < src/icart_mini_ros2/ros2.repos
 ```
-リポジトリルートには依存パッケージの取得元をまとめた `ros2.repos` を同梱しています（`icart_mini_ros2`, `i-Cart`, `yp-spur`, `urg_node2`）。`vcs import` を使えば、このファイルに記載されたリビジョンで依存リポジトリを一括取得できます。
+リポジトリルートには依存パッケージの取得元をまとめた `ros2.repos` を同梱しています（`icart_mini_ros2`, `gazebo-ros-actor-plugin`, `i-Cart`, `yp-spur`, `urg_node2`）。`vcs import` を使えば、このファイルに記載されたリビジョンで依存リポジトリを一括取得できます。
 
 ### ビルド
 
@@ -486,5 +486,7 @@ ip addr
   - 実機 LiDAR で使用
 - [i-Cart モデルデータ](https://github.com/BND-tc/i-Cart)
   - `icart_mini_description` の URDF・パラメータで使用
+- [gazebo-ros-actor-plugin](https://github.com/ShunjiHashimoto/gazebo-ros-actor-plugin)
+  - Fortress Actor 版の DoctorFemaleWalk 制御と脚プロキシ同期で使用
 
 `apt` では `ros-humble-joy`、`ros-humble-teleop-twist-joy`、`ros-humble-pcl-ros`、Fortress 版に必要な `ros-humble-ros-gz` / `ros-humble-ros-gz-sim` / `ros-humble-ros-gz-bridge` などが必要です。Docker イメージを使う場合は Dockerfile 内でインストールされます。
