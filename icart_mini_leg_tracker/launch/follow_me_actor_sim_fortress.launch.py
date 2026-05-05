@@ -11,7 +11,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition, LaunchConfigurationEquals
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -25,18 +25,27 @@ def launch_setup(context, *args, **kwargs):
     rviz_config = os.path.join(description_share, 'rviz', 'follow_me_sim.rviz')
     bridge_config = os.path.join(description_share, 'config', 'fortress_bridge.yaml')
     actor_bridge_config = os.path.join(tracker_share, 'config', 'actor_bridge.yaml')
-    leg_model = os.path.join(description_share, 'models', 'inverted_pendulum_biped', 'leg.sdf')
+    debug_leg_model = os.path.join(
+        description_share, 'models', 'inverted_pendulum_biped', 'leg.sdf'
+    )
+    hidden_leg_model = os.path.join(
+        description_share, 'models', 'inverted_pendulum_biped', 'leg_hidden.sdf'
+    )
     direction_marker_model = os.path.join(
         description_share, 'models', 'inverted_pendulum_biped', 'direction_marker.sdf'
     )
     actor_models_path = os.path.join(actor_share, 'config', 'skins')
     actor_xacro = os.path.join(actor_models_path, 'DoctorFemaleWalk', 'model.sdf.xacro')
+    actor_plugin_path = os.path.join(actor_share, '..', '..', 'lib')
 
     world = LaunchConfiguration('world').perform(context)
     world_name = LaunchConfiguration('world_name').perform(context)
     gui = LaunchConfiguration('gui').perform(context).strip().lower()
+    proxy_visual = LaunchConfiguration('proxy_visual').perform(context).strip().lower()
     gz_args = f"-r {world}" if gui in ('1', 'true', 'yes', 'on') else f"-r -s {world}"
     pose_service = f'/world/{world_name}/set_pose'
+    # hiddenはGUI上で透明にするだけで、gpu_lidar用のrendering geometryとcollisionは残す。
+    leg_model = hidden_leg_model if proxy_visual == 'hidden' else debug_leg_model
 
     use_rviz = LaunchConfiguration('use_rviz')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -53,6 +62,14 @@ def launch_setup(context, *args, **kwargs):
     actor_linear_scale = LaunchConfiguration('actor_linear_scale')
     actor_angular_scale = LaunchConfiguration('actor_angular_scale')
     actor_pose_publish_rate = LaunchConfiguration('actor_pose_publish_rate')
+    foot_pose_publish_rate = LaunchConfiguration('foot_pose_publish_rate')
+    foot_lateral_offset = LaunchConfiguration('foot_lateral_offset')
+    foot_forward_offset = LaunchConfiguration('foot_forward_offset')
+    foot_z = LaunchConfiguration('foot_z')
+    proxy_z = LaunchConfiguration('proxy_z')
+    foot_proxy_center_offset_x = LaunchConfiguration('foot_proxy_center_offset_x')
+    foot_proxy_center_offset_y = LaunchConfiguration('foot_proxy_center_offset_y')
+    scan_target_mode = LaunchConfiguration('scan_target_mode')
     use_joy = LaunchConfiguration('use_joy')
     joy_device_id = LaunchConfiguration('joy_device_id')
     joy_device_name = LaunchConfiguration('joy_device_name')
@@ -65,20 +82,44 @@ def launch_setup(context, *args, **kwargs):
         ' linear_velocity:=1.0',
         ' publish_pose:=true',
         ' pose_publish_rate:=', actor_pose_publish_rate,
-        # Actor本体の初期位置は ros_gz_sim create の -x/-y/-z で渡す。
-        # pose_offset にも同じ値を入れると /person/actor_pose が二重にずれる。
-        ' pose_offset_x:=0.0',
-        ' pose_offset_y:=0.0',
-        ' pose_offset_z:=0.0',
+        # ros_gz_sim create の -x/-y/-z は Actor plugin の TrajectoryPose に入らないため、
+        # DAE由来の足poseと /person/actor_pose をworld座標へ戻すoffsetとして渡す。
+        ' pose_offset_x:=', initial_x,
+        ' pose_offset_y:=', initial_y,
+        ' pose_offset_z:=', initial_z,
         ' pose_offset_roll:=0.0',
         ' pose_offset_pitch:=0.0',
         ' pose_offset_yaw:=0.0',
+        ' foot_pose_publish_rate:=', foot_pose_publish_rate,
+        ' foot_lateral_offset:=', foot_lateral_offset,
+        ' foot_forward_offset:=', foot_forward_offset,
+        ' foot_z:=', foot_z,
+        ' sync_foot_proxies:=',
+        PythonExpression(["'true' if '", scan_target_mode,
+                          "' == 'actor_synced_proxy' else 'false'"]),
+        ' left_foot_proxy_name:=biped_left_leg',
+        ' right_foot_proxy_name:=biped_right_leg',
+        ' proxy_z:=', proxy_z,
+        ' foot_proxy_center_offset_x:=', foot_proxy_center_offset_x,
+        ' foot_proxy_center_offset_y:=', foot_proxy_center_offset_y,
     ])
+
+    actor_mode_condition = IfCondition(PythonExpression([
+        "'", scan_target_mode, "' == 'actor_mesh' or '",
+        scan_target_mode, "' == 'actor_synced_proxy'",
+    ]))
+    proxy_mode_condition = IfCondition(PythonExpression([
+        "'", scan_target_mode, "' == 'leg_proxy' or '",
+        scan_target_mode, "' == 'actor_synced_proxy'",
+    ]))
 
     return [
         # DoctorFemaleWalk の model://config/skins/... 参照を Gazebo が解決できるようにする。
         AppendEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=actor_share),
         AppendEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=actor_models_path),
+        # Gazebo server process が Actor plugin の共有ライブラリを解決できるようにする。
+        AppendEnvironmentVariable(name='GZ_SIM_SYSTEM_PLUGIN_PATH', value=actor_plugin_path),
+        AppendEnvironmentVariable(name='IGN_GAZEBO_SYSTEM_PLUGIN_PATH', value=actor_plugin_path),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(gazebo_launch),
@@ -97,7 +138,7 @@ def launch_setup(context, *args, **kwargs):
         ),
 
         Node(
-            condition=LaunchConfigurationEquals('scan_target_mode', 'actor_mesh'),
+            condition=actor_mode_condition,
             package='ros_gz_bridge',
             executable='parameter_bridge',
             name='actor_parameter_bridge',
@@ -106,7 +147,7 @@ def launch_setup(context, *args, **kwargs):
         ),
 
         Node(
-            condition=LaunchConfigurationEquals('scan_target_mode', 'actor_mesh'),
+            condition=actor_mode_condition,
             package='icart_mini_leg_tracker',
             executable='actor_cmd_vel_relay.py',
             name='actor_cmd_vel_relay',
@@ -166,7 +207,7 @@ def launch_setup(context, *args, **kwargs):
         ),
 
         Node(
-            condition=LaunchConfigurationEquals('scan_target_mode', 'actor_mesh'),
+            condition=actor_mode_condition,
             package='ros_gz_sim',
             executable='create',
             arguments=[
@@ -181,7 +222,7 @@ def launch_setup(context, *args, **kwargs):
         ),
 
         Node(
-            condition=LaunchConfigurationEquals('scan_target_mode', 'leg_proxy'),
+            condition=proxy_mode_condition,
             package='ros_gz_sim',
             executable='create',
             arguments=[
@@ -196,7 +237,7 @@ def launch_setup(context, *args, **kwargs):
         ),
 
         Node(
-            condition=LaunchConfigurationEquals('scan_target_mode', 'leg_proxy'),
+            condition=proxy_mode_condition,
             package='ros_gz_sim',
             executable='create',
             arguments=[
@@ -324,10 +365,27 @@ def generate_launch_description():
             description='Actor pose publish rate.',
         ),
         DeclareLaunchArgument(
+            'foot_pose_publish_rate',
+            default_value='30.0',
+            description='DAE-derived actor foot pose publish rate.',
+        ),
+        DeclareLaunchArgument('foot_lateral_offset', default_value='0.0'),
+        DeclareLaunchArgument('foot_forward_offset', default_value='0.0'),
+        DeclareLaunchArgument('foot_z', default_value='0.0'),
+        DeclareLaunchArgument('proxy_z', default_value='0.0'),
+        DeclareLaunchArgument('foot_proxy_center_offset_x', default_value='0.0'),
+        DeclareLaunchArgument('foot_proxy_center_offset_y', default_value='0.0'),
+        DeclareLaunchArgument(
+            'proxy_visual',
+            default_value='debug',
+            choices=['debug', 'hidden'],
+            description='脚プロキシの表示: debug は円柱visualあり、hidden は透明visualとcollisionを残す。',
+        ),
+        DeclareLaunchArgument(
             'scan_target_mode',
-            default_value='leg_proxy',
-            choices=['leg_proxy', 'actor_mesh'],
-            description='LiDAR検出対象: leg_proxy は左右脚プロキシのみ、actor_mesh はActorのみ。',
+            default_value='actor_synced_proxy',
+            choices=['actor_synced_proxy', 'actor_mesh', 'leg_proxy'],
+            description='LiDAR検出対象: actor_synced_proxy はActorと同期脚プロキシ、actor_mesh はActorのみ、leg_proxy は左右脚プロキシのみ。',
         ),
         DeclareLaunchArgument('use_joy', default_value='true'),
         DeclareLaunchArgument('joy_device_id', default_value='0'),
