@@ -31,16 +31,6 @@ def generate_launch_description():
         DeclareLaunchArgument('step_width', default_value='0.22'),
         DeclareLaunchArgument('step_frequency', default_value='1.2'),
         DeclareLaunchArgument(
-            'actor_linear_scale',
-            default_value='1.0',
-            description='Actorへ渡す /person/cmd_vel の直進速度倍率。脚プロキシには影響しない。',
-        ),
-        DeclareLaunchArgument(
-            'actor_angular_scale',
-            default_value='1.0',
-            description='Actorへ渡す /person/cmd_vel の旋回速度倍率。脚プロキシには影響しない。',
-        ),
-        DeclareLaunchArgument(
             'actor_pose_publish_rate',
             default_value='30.0',
             description='Actor pose publish rate.',
@@ -54,7 +44,7 @@ def generate_launch_description():
         DeclareLaunchArgument('proxy_z', default_value='0.0'),
         DeclareLaunchArgument(
             'proxy_visual',
-            default_value='debug',
+            default_value='hidden',
             choices=['debug', 'hidden'],
             description='脚プロキシの表示: debug は円柱visualあり、hidden は透明visualとcollisionを残す。',
         ),
@@ -87,8 +77,6 @@ def generate_launch_description():
                 'step_length': LaunchConfiguration('step_length'),
                 'step_width': LaunchConfiguration('step_width'),
                 'step_frequency': LaunchConfiguration('step_frequency'),
-                'actor_linear_scale': LaunchConfiguration('actor_linear_scale'),
-                'actor_angular_scale': LaunchConfiguration('actor_angular_scale'),
                 'actor_pose_publish_rate': LaunchConfiguration('actor_pose_publish_rate'),
                 'foot_pose_publish_rate': LaunchConfiguration('foot_pose_publish_rate'),
                 'foot_z': LaunchConfiguration('foot_z'),

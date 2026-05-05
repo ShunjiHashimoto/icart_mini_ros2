@@ -16,6 +16,7 @@
 | `icart_mini_leg_tracker` | LiDAR 点群から脚クラスタを追跡し、Follow me 用 `/cmd_vel` を生成 |
 | `icart_mini_ypspur_bridge` | `YP-Spur` と ROS 2 の橋渡し |
 | `docker` | 開発・シミュレーション実行用 Docker 環境 |
+| `sh` | 実機 bringup を Docker で起動・停止する補助スクリプト |
 
 ## 動作環境
 
@@ -93,7 +94,7 @@ Dockerfile には Fortress 版に必要な `ros_gz` / `ros_gz_sim` / `ros_gz_bri
 ```bash
 cd /root/icart_ws
 source /opt/ros/humble/setup.bash
-vcs import src < src/ros2.repos
+vcs import src < src/icart_mini_ros2/ros2.repos
 colcon build --symlink-install --packages-select gazebo_ros_actor_plugin icart_mini_description icart_mini_leg_tracker
 source install/setup.bash
 ```
@@ -291,8 +292,6 @@ launch 起動時点では Follow me もターゲット移動も開始しませ�
 | `initial_x` | `initial_x:=0.9` | Actor 版のターゲット初期 x 位置。ロボットとの初期干渉を避けるため、従来の円柱のみの launch より前方に置く |
 | `initial_y` | `initial_y:=0.0` | ターゲット初期 y 位置 |
 | `scan_target_mode` | `scan_target_mode:=actor_proxy` | Actor 版 launch の LiDAR 検出対象。`actor_proxy` は Actor と同期脚プロキシ、`leg_proxy` は左右脚プロキシのみ |
-| `actor_linear_scale` | `actor_linear_scale:=1.0` | Actor だけに掛ける直進速度倍率。左右脚プロキシの速度には影響しない |
-| `actor_angular_scale` | `actor_angular_scale:=1.0` | Actor だけに掛ける旋回速度倍率。左右脚プロキシの速度には影響しない |
 | `actor_pose_publish_rate` | `actor_pose_publish_rate:=30.0` | Actor pose の publish 周期 |
 | `update_rate` | `update_rate:=60.0` | 倒立振子風ターゲットの Gazebo 更新周期 |
 | `step_length` | `step_length:=0.24` | 倒立振子風ターゲットの左右足の前後ステップ幅 |
@@ -325,9 +324,7 @@ ros2 topic echo /leg_tracker/person_marker --once
 
 Gazebo シミュレーションでは、LiDAR に安定して見える円柱脚モデルを追従対象にします。Fortress 版の `follow_me_biped_sim_fortress.launch.py` では左右の脚を別エンティティとして spawn し、`/world/<world_name>/set_pose` service 経由で位置を更新します。倒立振子モデルの簡易表現として左右足が交互に前後するようにし、Gazebo 上には倒立振子リンクは表示せず、LiDAR に見える円柱だけを動かします。
 
-Actor 版の `follow_me_actor_sim_fortress.launch.py` と `follow_me_actor_obstacle_sim_fortress.launch.py` は、`gazebo_ros_actor_plugin` の `DoctorFemaleWalk/model.sdf.xacro` を `xacro` で展開し、Gazebo entity 名 `person_actor` として `ros_gz_sim create -string` で spawn します。Actor は velocity mode で使い、`/person/cmd_vel` を `actor_cmd_vel_relay.py` でActor用にスケールしてから Gazebo 側 `/person_actor/cmd_vel` へ bridge します。Gazebo 側 `/person_actor/pose` は ROS 側 `/person/actor_pose` へ bridge します。
-
-Actor の速度感を調整したい場合は、`actor_linear_scale` と `actor_angular_scale` を指定します。デフォルトは `1.0` で、`/person/cmd_vel` をそのまま Actor 用 topic へ中継します。
+Actor 版の `follow_me_actor_sim_fortress.launch.py` と `follow_me_actor_obstacle_sim_fortress.launch.py` は、`gazebo_ros_actor_plugin` の `DoctorFemaleWalk/model.sdf.xacro` を `xacro` で展開し、Gazebo entity 名 `person_actor` として `ros_gz_sim create -string` で spawn します。Actor は velocity mode で使い、ROS 側 `/person/cmd_vel` を Gazebo 側 `/person_actor/cmd_vel` へ bridge します。Gazebo 側 `/person_actor/pose` は ROS 側 `/person/actor_pose` へ bridge します。
 
 Actor 版の `scan_target_mode` は `actor_proxy` がデフォルトです。`actor_proxy` では DoctorFemaleWalk Actor と左右脚プロキシを同時に spawn し、Actor plugin 内で DAE 由来の足 pose に脚プロキシを同期します。`leg_proxy` では既存同等の左右脚プロキシと方向マーカーだけを spawn し、`inverted_pendulum_biped_controller.py` が `/person/cmd_vel` と `/person/control` で脚プロキシを更新します。
 
@@ -345,9 +342,8 @@ Fortress の `gpu_lidar` は collision ではなく rendering geometry、つま�
 | --- | --- | --- | --- |
 | `leg_cluster_tracking_node` | LiDAR 点群から脚クラスタを検出し追従制御を生成 | `/scan`, `/joy`, `/follow_me/control` | `/cmd_vel`, `/leg_tracker/cluster_markers`, `/leg_tracker/cluster_centers`, `/leg_tracker/cluster_infos`, `/leg_tracker/person_marker`, `/leg_tracker/is_lost_target` |
 | `joystick_follow_me_teleop.py` | シミュレーション用に F710 の操作対象をロボットと人物モデルで切替 | `/joy` | `/cmd_vel`, `/person/cmd_vel`, `/person/control` |
-| `actor_cmd_vel_relay.py` | Actorだけ速度感を補正するため、`/person/cmd_vel` をスケールしてActor用topicへ中継 | `/person/cmd_vel` | `/person_actor/cmd_vel` |
 | `inverted_pendulum_biped_controller.py` | 左右足を交互に踏み出す倒立振子風ターゲットを移動 | `/person/cmd_vel`, `/person/control`, `/world/<world_name>/set_pose` | `/person/motion_event` |
-| `actor_parameter_bridge` | Actor 操作用の ROS/Gazebo topic bridge | `/person_actor/cmd_vel`, `/person_actor/pose` | `/person_actor/cmd_vel`, `/person/actor_pose` |
+| `actor_parameter_bridge` | Actor 操作用の ROS/Gazebo topic bridge | `/person/cmd_vel`, `/person_actor/pose` | `/person_actor/cmd_vel`, `/person/actor_pose` |
 | `icart_mini_ypspur_bridge` | 実機用 YP-Spur ブリッジ | `/cmd_vel` | `/odom`, `/joint_states`, TF |
 | `urg_node2` | 実機 LiDAR ドライバ | - | `/scan` |
 

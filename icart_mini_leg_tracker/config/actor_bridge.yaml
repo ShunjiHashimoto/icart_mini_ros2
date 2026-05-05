@@ -1,7 +1,7 @@
 # Gazebo Actor plugin の topic は Gazebo Transport 側で person_actor/* になる。
-# /person/cmd_vel は脚プロキシも購読するため、Actor用にはrelay後の /person_actor/cmd_vel をbridgeする。
+# ROS側の操作topicは /person/cmd_vel に統一し、bridgeでActor用のGazebo topicへ直接流す。
 
-- ros_topic_name: "/person_actor/cmd_vel"
+- ros_topic_name: "/person/cmd_vel"
   gz_topic_name: "/person_actor/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
   gz_type_name: "ignition.msgs.Twist"
