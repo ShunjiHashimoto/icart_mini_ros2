@@ -131,9 +131,8 @@ private:
     bool filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     int initializeTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, geometry_msgs::msg::Point &target_pos);
     bool verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement);
-    std::optional<std::pair<int, geometry_msgs::msg::Point>> selectNewTarget(
-        const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
-        bool previous_target_found);
+    std::optional<std::pair<int, geometry_msgs::msg::Point>> selectReacquisitionTarget(
+        const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     std::optional<std::pair<int, geometry_msgs::msg::Point>> findSecondaryCluster(
         const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
         int primary_target_id, 

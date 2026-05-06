@@ -578,14 +578,23 @@ void LegClusterTracking::trackClusters(std::map<int, geometry_msgs::msg::Point> 
 // 追従対象の初期選択を行う関数
 int LegClusterTracking::initializeTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, geometry_msgs::msg::Point &target_pos) {
     double min_distance = std::numeric_limits<double>::max();
+    int selected_target_id = -1;
     for (const auto &[current_id, current_center] : cluster_centers) {
+        // 初期取得だけはロボット正面の有効領域に限定し、横や遠方の障害物を開始対象にしない。
+        if (!(current_center.x > 0 &&
+              current_center.x < INITIAL_TARGET_MAX_X &&
+              std::fabs(current_center.y) < INITIAL_TARGET_MAX_ABS_Y)) {
+            continue;
+        }
+
         double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);
-        if (current_center.x > 0 && dist < min_distance) {  // 前方 (x > 0) のクラスタを選ぶ
+        if (dist < min_distance) {
             min_distance = dist;
-            target_id = current_id;
+            selected_target_id = current_id;
             target_pos = current_center;
         }
     }
+    target_id = selected_target_id;
     return target_id;
 }
 
@@ -612,16 +621,20 @@ bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs:
 }
 
 std::optional<std::pair<int, geometry_msgs::msg::Point>> 
-LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, 
-                                    bool previous_target_found) { // 前回の追従対象が見つからなかったが、前回の追従対象の位置はわかる
-    double min_movement = std::numeric_limits<double>::max();  // 前回の対象との移動距離
-    double min_distance = std::numeric_limits<double>::max();  // ロボットとの距離
+LegClusterTracking::selectReacquisitionTarget(
+    const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
+    double best_gate_distance = std::numeric_limits<double>::max();
+    double best_distance_to_robot = std::numeric_limits<double>::max();
+    double best_angle_diff = -1.0;
     int new_target_id = -1;
     geometry_msgs::msg::Point new_target_pos;
-    bool selected_by_previous = false;
-    bool selected_by_distance = false;
-    double selected_movement = std::numeric_limits<double>::max();
-    double selected_distance = std::numeric_limits<double>::max();
+
+    double nearest_rejected_gate_distance = std::numeric_limits<double>::max();
+    double nearest_rejected_distance_to_robot = -1.0;
+    double nearest_rejected_angle_diff = -1.0;
+    int nearest_rejected_id = -1;
+    geometry_msgs::msg::Point nearest_rejected_pos;
+    const auto predicted_target_pos = predictedTargetPosition();
 
     last_selection_called_ = true;
     last_selection_target_id_ = -1;
@@ -630,76 +643,77 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
     last_selection_distance_to_robot_ = -1.0;
     last_selection_timestamp_ = this->now().seconds();
 
-    RCLCPP_INFO(this->get_logger(), "selectNewTarget開始: previous_target_found=%s, cluster_count=%zu",
-                previous_target_found ? "true" : "false", cluster_centers.size());
+    RCLCPP_INFO(this->get_logger(),
+                "selectReacquisitionTarget開始: cluster_count=%zu, previous=(%.2f, %.2f), predicted=(%.2f, %.2f)",
+                cluster_centers.size(),
+                previous_target_pos_.x, previous_target_pos_.y,
+                predicted_target_pos.x, predicted_target_pos.y);
 
     for (const auto &[current_id, current_center] : cluster_centers) {
-        double dist = sqrt(current_center.x * current_center.x + current_center.y * current_center.y);  // ロボットとの距離
-        double movement_from_prev = std::numeric_limits<double>::max();  // 初期化
-        
-        // 前回の対象が見つかっている場合、移動距離を計算
-        // TODO: 前回の対象が見つからなかった場合は、前回の対象の位置をもとにもっともらしい対象を選ぶ
-        movement_from_prev = sqrt(pow(current_center.x - previous_target_pos_.x, 2) + 
-                                  pow(current_center.y - previous_target_pos_.y, 2));
-        RCLCPP_INFO(this->get_logger(), "計算対象のクラスタID: %d, 中心座標: (%.2f, %.2f), 前回の追従対象の座標: (%.2f, %.2f)", current_id, current_center.x, current_center.y, previous_target_pos_.x, previous_target_pos_.y);
-        RCLCPP_INFO(this->get_logger(), "前回の対象との移動距離: %.3f, 計算対象のid: %d, 追従対象のid: %d", movement_from_prev, current_id, target_id);
+        const double distance_to_previous = calculateDistance(current_center, previous_target_pos_);
+        const double distance_to_prediction = calculateDistance(current_center, predicted_target_pos);
+        const double gate_distance = std::min(distance_to_previous, distance_to_prediction);
+        const double distance_to_robot = std::hypot(current_center.x, current_center.y);
+        const double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
+        const double current_angle = std::atan2(current_center.y, current_center.x);
+        const double angle_diff = std::fabs(std::atan2(
+            std::sin(current_angle - previous_angle),
+            std::cos(current_angle - previous_angle)));
 
-        // 【優先度】 (1) できるだけ前回の対象に近い → (2) ロボットから近い
-        // 前回の対象が見つからなかった場合、または、移動距離がしきい値以下の場合
-        if (!previous_target_found || movement_from_prev < MOVEMENT_THRESHOLD) {  
-            // より前回の位置に近いクラスタを記録
-            if (movement_from_prev < min_movement) {
-                min_movement = movement_from_prev;
+        RCLCPP_INFO(this->get_logger(),
+                    "再捕捉候補ID: %d, center=(%.2f, %.2f), previous_dist=%.3f, predicted_dist=%.3f, gate_dist=%.3f",
+                    current_id, current_center.x, current_center.y,
+                    distance_to_previous, distance_to_prediction, gate_distance);
+
+        // 追従中の再捕捉では、近い障害物へ乗り移らないようにロボット距離では選ばない。
+        // 前回位置または予測位置の近傍だけを、同じ人物の候補として扱う。
+        if (gate_distance <= MOVEMENT_THRESHOLD) {
+            if (gate_distance < best_gate_distance) {
+                best_gate_distance = gate_distance;
+                best_distance_to_robot = distance_to_robot;
+                best_angle_diff = angle_diff;
                 new_target_id = current_id;
                 new_target_pos = current_center;
-                selected_by_previous = true;
-                selected_by_distance = false;
-                selected_movement = movement_from_prev;
             }
-        // 前回の対象が遠く離れていた場合、ロボットに近いものを代わりに選ぶ
-        } else if (new_target_id == -1 || dist < min_distance) {
-            min_distance = dist;
-            new_target_id = current_id;
-            new_target_pos = current_center;
-            selected_by_previous = false;
-            selected_by_distance = true;
-            selected_distance = dist;
+        } else if (gate_distance < nearest_rejected_gate_distance) {
+            nearest_rejected_gate_distance = gate_distance;
+            nearest_rejected_distance_to_robot = distance_to_robot;
+            nearest_rejected_angle_diff = angle_diff;
+            nearest_rejected_id = current_id;
+            nearest_rejected_pos = current_center;
         }
     }
 
     if (new_target_id == -1) {
-        last_selection_reason_ = "not_found";
-        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: 候補が見つかりませんでした");
-        return std::nullopt;  // 追従対象なし
+        if (nearest_rejected_id != -1) {
+            last_selection_target_id_ = nearest_rejected_id;
+            last_selection_reason_ = "movement_threshold";
+            last_selection_movement_ = nearest_rejected_gate_distance;
+            last_selection_distance_to_robot_ = nearest_rejected_distance_to_robot;
+            last_selection_angle_diff_ = nearest_rejected_angle_diff;
+            last_rejection_reason_ = "movement_threshold";
+            has_rejected_candidate_ = true;
+            rejected_candidate_pos_ = nearest_rejected_pos;
+            RCLCPP_WARN(this->get_logger(),
+                        "再捕捉候補ID %d は前回/予測位置から離れすぎているためreject (距離: %.3f)",
+                        nearest_rejected_id, nearest_rejected_gate_distance);
+        } else {
+            last_selection_reason_ = "not_found";
+            last_rejection_reason_ = "not_found";
+            RCLCPP_INFO(this->get_logger(), "selectReacquisitionTarget結果: 候補が見つかりませんでした");
+        }
+        return std::nullopt;
     }
 
-    double dist_to_robot = sqrt(new_target_pos.x * new_target_pos.x + new_target_pos.y * new_target_pos.y);
-    if (selected_by_previous && !selected_by_distance) {
-        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d を前回位置優先で選択 (移動距離: %.3f, ロボット距離: %.3f)",
-                    new_target_id, selected_movement, dist_to_robot);
-        last_selection_reason_ = "previous_target";
-        last_selection_movement_ = selected_movement;
-    } else if (selected_by_distance) {
-        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d をロボットとの距離優先で選択 (距離: %.3f)",
-                    new_target_id, selected_distance);
-        last_selection_reason_ = "closest_robot";
-        last_selection_movement_ = -1.0;
-    } else {
-        RCLCPP_INFO(this->get_logger(), "selectNewTarget結果: ID=%d を選択", new_target_id);
-        last_selection_reason_ = "other";
-        last_selection_movement_ = -1.0;
-    }
-
+    RCLCPP_INFO(this->get_logger(),
+                "selectReacquisitionTarget結果: ID=%d を前回/予測位置優先で選択 (距離: %.3f, ロボット距離: %.3f)",
+                new_target_id, best_gate_distance, best_distance_to_robot);
     last_selection_target_id_ = new_target_id;
-    last_selection_distance_to_robot_ = dist_to_robot;
-    if (is_target_initialized_) {
-        const double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
-        const double new_angle = std::atan2(new_target_pos.y, new_target_pos.x);
-        const double angle_diff = std::atan2(
-            std::sin(new_angle - previous_angle),
-            std::cos(new_angle - previous_angle));
-        last_selection_angle_diff_ = std::fabs(angle_diff);
-    }
+    last_selection_reason_ = "previous_target";
+    last_selection_movement_ = best_gate_distance;
+    last_selection_distance_to_robot_ = best_distance_to_robot;
+    last_selection_angle_diff_ = best_angle_diff;
+    last_rejection_reason_ = "none";
 
     return std::make_pair(new_target_id, new_target_pos);
 }
@@ -817,7 +831,31 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         publishLostState(false);
         RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
 
-        if (auto new_target = selectNewTarget(cluster_centers, previous_target_found)) {
+        if (previous_target_found && movement > MOVEMENT_THRESHOLD) {
+            const double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
+            const double target_angle = std::atan2(target_pos.y, target_pos.x);
+            const double angle_diff = std::fabs(std::atan2(
+                std::sin(target_angle - previous_angle),
+                std::cos(target_angle - previous_angle)));
+
+            RCLCPP_WARN(this->get_logger(),
+                        "前回ターゲットID %d は移動量が大きすぎるため一時ロストとして保持 (移動距離: %.3f)",
+                        target_id, movement);
+            last_selection_called_ = true;
+            last_selection_target_id_ = target_id;
+            last_selection_reason_ = "movement_threshold";
+            last_selection_movement_ = movement;
+            last_selection_distance_to_robot_ = std::hypot(target_pos.x, target_pos.y);
+            last_selection_angle_diff_ = angle_diff;
+            last_selection_timestamp_ = this->now().seconds();
+            last_rejection_reason_ = "movement_threshold";
+            has_rejected_candidate_ = true;
+            rejected_candidate_pos_ = target_pos;
+            saveDebugCsv();
+            return;
+        }
+
+        if (auto new_target = selectReacquisitionTarget(cluster_centers)) {
             target_id = new_target->first;
             target_pos = new_target->second;
             if (is_target_initialized_) {
@@ -830,7 +868,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
                 if (distance_diff > LOST_DISTANCE_JUMP && angle_diff > LOST_ANGLE_JUMP) {
                     RCLCPP_WARN(this->get_logger(),
-                                "selectNewTarget: 新しい候補(ID %d)が前回位置と大きく異なるため停止 (距離: %.3f, 角度差: %.2f)",
+                                "selectReacquisitionTarget: 新しい候補(ID %d)が前回位置と大きく異なるため停止 (距離: %.3f, 角度差: %.2f)",
                                 target_id, distance_diff, angle_diff);
 
                     publishCmdVel(0.0, 0.0);
