@@ -1,0 +1,126 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="follow_me_leg_like_pillars_offset">
+    <plugin filename="libignition-gazebo-physics-system.so"
+            name="ignition::gazebo::systems::Physics"/>
+    <plugin filename="libignition-gazebo-user-commands-system.so"
+            name="ignition::gazebo::systems::UserCommands"/>
+    <plugin filename="libignition-gazebo-scene-broadcaster-system.so"
+            name="ignition::gazebo::systems::SceneBroadcaster"/>
+    <plugin filename="libignition-gazebo-sensors-system.so"
+            name="ignition::gazebo::systems::Sensors">
+      <!-- FortressではLiDAR出力をGazebo Transportへ出し、ROS側へはros_gz_bridgeで接続する。 -->
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <physics name="default_physics" type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <scene>
+      <ambient>0.45 0.45 0.45 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="leg_like_pillar_left_near">
+      <static>true</static>
+      <!-- 左右非対称に置き、片脚だけが柱に近づく瞬間を作る。 -->
+      <pose>1.55 0.30 0.35 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.045</radius>
+              <length>0.70</length>
+            </cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <!-- 536870913 = GUI表示bit(1) + LiDAR専用bit(0x20000000)。柱はGUIにも/scanにも出す。 -->
+          <visibility_flags>536870913</visibility_flags>
+          <geometry>
+            <cylinder>
+              <radius>0.045</radius>
+              <length>0.70</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.85 0.20 0.12 1</ambient>
+            <diffuse>0.85 0.20 0.12 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="leg_like_pillar_right_far">
+      <static>true</static>
+      <pose>1.95 -0.42 0.35 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.045</radius>
+              <length>0.70</length>
+            </cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <visibility_flags>536870913</visibility_flags>
+          <geometry>
+            <cylinder>
+              <radius>0.045</radius>
+              <length>0.70</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.85 0.20 0.12 1</ambient>
+            <diffuse>0.85 0.20 0.12 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>

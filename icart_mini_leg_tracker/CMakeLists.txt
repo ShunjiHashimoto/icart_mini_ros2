@@ -72,6 +72,7 @@ install(TARGETS leg_cluster_tracking_node
 install(PROGRAMS
   scripts/led_status.py
   scripts/joystick_follow_me_teleop.py
+  scripts/actor_debug_motion_runner.py
   scripts/fortress_frame_relay.py
   scripts/moving_leg_pair_controller.py
   scripts/inverted_pendulum_biped_controller.py
