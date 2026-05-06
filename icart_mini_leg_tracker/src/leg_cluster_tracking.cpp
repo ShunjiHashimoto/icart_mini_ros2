@@ -22,6 +22,7 @@ LegClusterTracking::LegClusterTracking() :
     accumulated_loop_period_(0.0),
     loop_sample_count_(0)
     {
+    this->loadTrackingParameters();
 
     lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
         "/scan", rclcpp::QoS(10).best_effort(), 
@@ -54,6 +55,59 @@ LegClusterTracking::LegClusterTracking() :
     target_lost_start_time_ = this->now();
     last_callback_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
     publishLostState(false);
+}
+
+void LegClusterTracking::loadTrackingParameters() {
+    this->target_reacquire_timeout_ =
+        this->declare_parameter<double>("target_reacquire_timeout", TARGET_LOST_TIMEOUT);
+    this->predicted_gate_distance_ =
+        this->declare_parameter<double>("predicted_gate_distance", MOVEMENT_THRESHOLD);
+    this->max_target_angle_jump_ =
+        this->declare_parameter<double>("max_target_angle_jump", LOST_ANGLE_JUMP);
+    this->max_target_distance_jump_ =
+        this->declare_parameter<double>("max_target_distance_jump", LOST_DISTANCE_JUMP);
+    this->reacquire_max_angle_diff_ =
+        this->declare_parameter<double>("reacquire_max_angle_diff", REACQUIRE_MAX_ANGLE_DIFF);
+    this->reacquire_max_speed_ =
+        this->declare_parameter<double>("reacquire_max_speed", REACQUIRE_MAX_SPEED);
+    this->leg_pair_min_distance_ =
+        this->declare_parameter<double>("leg_pair_min_distance", FOOT_PAIR_MIN_DISTANCE);
+    this->leg_pair_max_distance_ =
+        this->declare_parameter<double>("leg_pair_max_distance", FOOT_PAIR_MAX_DISTANCE);
+    this->leg_pair_center_gate_distance_ =
+        this->declare_parameter<double>("leg_pair_center_gate_distance", FOOT_PAIR_CENTER_GATE_DISTANCE);
+    this->leg_pair_max_lateral_distance_ =
+        this->declare_parameter<double>("leg_pair_max_lateral_distance", FOOT_PAIR_MAX_LATERAL_DISTANCE);
+    this->initial_target_max_x_ =
+        this->declare_parameter<double>("initial_target_max_x", INITIAL_TARGET_MAX_X);
+    this->initial_target_max_abs_y_ =
+        this->declare_parameter<double>("initial_target_max_abs_y", INITIAL_TARGET_MAX_ABS_Y);
+    this->static_speed_threshold_ =
+        this->declare_parameter<double>("static_speed_threshold", STATIC_SPEED_THRESHOLD);
+    this->static_frame_limit_ =
+        this->declare_parameter<int>("static_frame_limit", STATIC_FRAME_LIMIT);
+    this->safety_stop_distance_ =
+        this->declare_parameter<double>("safety_stop_distance", STOP_DISTANCE_THRESHOLD);
+
+    RCLCPP_INFO(
+        this->get_logger(),
+        "Tracking parameters loaded: reacquire_timeout=%.2f, gate=%.2f, "
+        "jump_distance=%.2f, jump_angle=%.2f, leg_pair=[%.2f, %.2f], "
+        "leg_center_gate=%.2f, leg_lateral_gate=%.2f, initial_region=(%.2f, %.2f), static=(%.2f, %d), "
+        "stop_distance=%.2f",
+        this->target_reacquire_timeout_,
+        this->predicted_gate_distance_,
+        this->max_target_distance_jump_,
+        this->max_target_angle_jump_,
+        this->leg_pair_min_distance_,
+        this->leg_pair_max_distance_,
+        this->leg_pair_center_gate_distance_,
+        this->leg_pair_max_lateral_distance_,
+        this->initial_target_max_x_,
+        this->initial_target_max_abs_y_,
+        this->static_speed_threshold_,
+        this->static_frame_limit_,
+        this->safety_stop_distance_);
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -317,13 +371,13 @@ void LegClusterTracking::smoothAndFilterVelocities(const std::map<int, geometry_
             smoothed_velocity.y *= (1.0 / speed);
         }
         // 静止クラスタのカウント
-        if (speed < STATIC_SPEED_THRESHOLD) {
+        if (speed < this->static_speed_threshold_) {
             cluster_static_frame_count_[id]++;
         } else {
             cluster_static_frame_count_[id] = 0;
         }
         // is_static 判定 & 保存
-        bool is_static = (cluster_static_frame_count_[id] > STATIC_FRAME_LIMIT && current_target_id_ != id && current_second_id_ != id);
+        bool is_static = (cluster_static_frame_count_[id] > this->static_frame_limit_ && current_target_id_ != id && current_second_id_ != id);
 
         icart_msg::ClusterInfo info;
         info.id = id;
@@ -336,6 +390,27 @@ void LegClusterTracking::smoothAndFilterVelocities(const std::map<int, geometry_
         //     RCLCPP_INFO(this->get_logger(), "クラスタID: %d は静止状態", id);
         // }
     }
+}
+
+LegClusterTracking::ClusterMotionInfo LegClusterTracking::getClusterMotionInfo(int cluster_id) const {
+    ClusterMotionInfo motion_info;
+
+    const auto info_it = cluster_info_map_.find(cluster_id);
+    if (info_it != cluster_info_map_.end()) {
+        motion_info.is_static = info_it->second.is_static;
+    }
+
+    // 再捕捉の速度判定ではID入れ替わり時の瞬間変化を見たいのでraw速度を優先する。
+    const auto raw_velocity_it = cluster_velocities_.find(cluster_id);
+    if (raw_velocity_it != cluster_velocities_.end()) {
+        const auto &raw_velocity = raw_velocity_it->second;
+        motion_info.speed = std::hypot(raw_velocity.x, raw_velocity.y);
+    } else if (info_it != cluster_info_map_.end()) {
+        const auto &velocity = info_it->second.velocity;
+        motion_info.speed = std::hypot(velocity.x, velocity.y);
+    }
+
+    return motion_info;
 }
 
 void LegClusterTracking::calculateClusterVelocities(
@@ -368,7 +443,7 @@ bool LegClusterTracking::filterClustersByRegion(std::map<int, geometry_msgs::msg
     for (auto it = cluster_centers.begin(); it != cluster_centers.end(); ) {
         const auto &center = it->second;
         // 正面1.0m以内かつ左右0.5m以内のクラスタのみ採用
-        if (!(center.x > 0 && center.x < INITIAL_TARGET_MAX_X && fabs(center.y) < INITIAL_TARGET_MAX_ABS_Y)) {
+        if (!(center.x > 0 && center.x < this->initial_target_max_x_ && fabs(center.y) < this->initial_target_max_abs_y_)) {
             RCLCPP_INFO(this->get_logger(), "クラスタID %d は有効領域外のため除外", it->first);
             it = cluster_centers.erase(it);  // 条件を満たさないクラスタを削除
         } else {
@@ -582,8 +657,8 @@ int LegClusterTracking::initializeTarget(const std::map<int, geometry_msgs::msg:
     for (const auto &[current_id, current_center] : cluster_centers) {
         // 初期取得だけはロボット正面の有効領域に限定し、横や遠方の障害物を開始対象にしない。
         if (!(current_center.x > 0 &&
-              current_center.x < INITIAL_TARGET_MAX_X &&
-              std::fabs(current_center.y) < INITIAL_TARGET_MAX_ABS_Y)) {
+              current_center.x < this->initial_target_max_x_ &&
+              std::fabs(current_center.y) < this->initial_target_max_abs_y_)) {
             continue;
         }
 
@@ -626,6 +701,7 @@ LegClusterTracking::selectReacquisitionTarget(
     double best_gate_distance = std::numeric_limits<double>::max();
     double best_distance_to_robot = std::numeric_limits<double>::max();
     double best_angle_diff = -1.0;
+    double best_score = std::numeric_limits<double>::max();
     int new_target_id = -1;
     geometry_msgs::msg::Point new_target_pos;
 
@@ -634,7 +710,26 @@ LegClusterTracking::selectReacquisitionTarget(
     double nearest_rejected_angle_diff = -1.0;
     int nearest_rejected_id = -1;
     geometry_msgs::msg::Point nearest_rejected_pos;
+    std::string nearest_rejected_reason = "not_found";
     const auto predicted_target_pos = predictedTargetPosition();
+
+    // 採用できなかった候補のうち、前回/予測位置に最も近いものをデバッグ用に記録する。
+    auto rememberRejectedCandidate = [&](
+        int candidate_id,
+        const geometry_msgs::msg::Point &candidate_pos,
+        double gate_distance,
+        double distance_to_robot,
+        double angle_diff,
+        const std::string &reason) {
+        if (gate_distance < nearest_rejected_gate_distance) {
+            nearest_rejected_gate_distance = gate_distance;
+            nearest_rejected_distance_to_robot = distance_to_robot;
+            nearest_rejected_angle_diff = angle_diff;
+            nearest_rejected_id = candidate_id;
+            nearest_rejected_pos = candidate_pos;
+            nearest_rejected_reason = reason;
+        }
+    };
 
     last_selection_called_ = true;
     last_selection_target_id_ = -1;
@@ -659,44 +754,73 @@ LegClusterTracking::selectReacquisitionTarget(
         const double angle_diff = std::fabs(std::atan2(
             std::sin(current_angle - previous_angle),
             std::cos(current_angle - previous_angle)));
+        const auto motion_info = this->getClusterMotionInfo(current_id);
+        const double speed = motion_info.speed;
+        const bool is_static = motion_info.is_static;
 
         RCLCPP_INFO(this->get_logger(),
-                    "再捕捉候補ID: %d, center=(%.2f, %.2f), previous_dist=%.3f, predicted_dist=%.3f, gate_dist=%.3f",
+                    "再捕捉候補ID: %d, center=(%.2f, %.2f), previous_dist=%.3f, predicted_dist=%.3f, gate_dist=%.3f, angle=%.3f, speed=%.3f, static=%s",
                     current_id, current_center.x, current_center.y,
-                    distance_to_previous, distance_to_prediction, gate_distance);
+                    distance_to_previous, distance_to_prediction, gate_distance,
+                    angle_diff, speed, is_static ? "true" : "false");
 
         // 追従中の再捕捉では、近い障害物へ乗り移らないようにロボット距離では選ばない。
         // 前回位置または予測位置の近傍だけを、同じ人物の候補として扱う。
-        if (gate_distance <= MOVEMENT_THRESHOLD) {
-            if (gate_distance < best_gate_distance) {
-                best_gate_distance = gate_distance;
-                best_distance_to_robot = distance_to_robot;
-                best_angle_diff = angle_diff;
-                new_target_id = current_id;
-                new_target_pos = current_center;
-            }
-        } else if (gate_distance < nearest_rejected_gate_distance) {
-            nearest_rejected_gate_distance = gate_distance;
-            nearest_rejected_distance_to_robot = distance_to_robot;
-            nearest_rejected_angle_diff = angle_diff;
-            nearest_rejected_id = current_id;
-            nearest_rejected_pos = current_center;
+        if (gate_distance > this->predicted_gate_distance_) {
+            rememberRejectedCandidate(
+                current_id, current_center, gate_distance, distance_to_robot,
+                angle_diff, "movement_threshold");
+            continue;
+        }
+
+        if (angle_diff > this->reacquire_max_angle_diff_) {
+            rememberRejectedCandidate(
+                current_id, current_center, gate_distance, distance_to_robot,
+                angle_diff, "angle_threshold");
+            continue;
+        }
+
+        if (speed > this->reacquire_max_speed_) {
+            rememberRejectedCandidate(
+                current_id, current_center, gate_distance, distance_to_robot,
+                angle_diff, "speed_threshold");
+            continue;
+        }
+
+        // ロボット座標系では静止障害物も相対移動して見えるため、動的判定を距離より
+        // 強く優先すると柱へ乗り移る。前回/予測位置への近さを主条件にし、静止判定は
+        // 同程度の候補を並べるための小さな補助スコアに留める。
+        const double static_penalty = is_static ? 0.05 : 0.0;
+        const double candidate_score = gate_distance + static_penalty;
+        const bool candidate_is_better =
+            new_target_id == -1 ||
+            candidate_score < best_score ||
+            (std::fabs(candidate_score - best_score) < 1e-6 &&
+             gate_distance < best_gate_distance);
+        if (candidate_is_better) {
+            best_score = candidate_score;
+            best_gate_distance = gate_distance;
+            best_distance_to_robot = distance_to_robot;
+            best_angle_diff = angle_diff;
+            new_target_id = current_id;
+            new_target_pos = current_center;
         }
     }
 
     if (new_target_id == -1) {
         if (nearest_rejected_id != -1) {
             last_selection_target_id_ = nearest_rejected_id;
-            last_selection_reason_ = "movement_threshold";
+            last_selection_reason_ = nearest_rejected_reason;
             last_selection_movement_ = nearest_rejected_gate_distance;
             last_selection_distance_to_robot_ = nearest_rejected_distance_to_robot;
             last_selection_angle_diff_ = nearest_rejected_angle_diff;
-            last_rejection_reason_ = "movement_threshold";
+            last_rejection_reason_ = nearest_rejected_reason;
             has_rejected_candidate_ = true;
             rejected_candidate_pos_ = nearest_rejected_pos;
             RCLCPP_WARN(this->get_logger(),
-                        "再捕捉候補ID %d は前回/予測位置から離れすぎているためreject (距離: %.3f)",
-                        nearest_rejected_id, nearest_rejected_gate_distance);
+                        "再捕捉候補ID %d をreject: %s (距離: %.3f, 角度差: %.3f)",
+                        nearest_rejected_id, nearest_rejected_reason.c_str(),
+                        nearest_rejected_gate_distance, nearest_rejected_angle_diff);
         } else {
             last_selection_reason_ = "not_found";
             last_rejection_reason_ = "not_found";
@@ -765,7 +889,7 @@ void LegClusterTracking::handleTargetLostTimeout() {
     RCLCPP_WARN(
         this->get_logger(),
         "追従対象を %.2f 秒以上再捕捉できないためLostに遷移します。",
-        TARGET_LOST_TIMEOUT);
+        this->target_reacquire_timeout_);
     setFollowTrackingState(FollowTrackingState::Lost);
     current_target_id_ = -1;
     current_second_id_ = -1;
@@ -820,7 +944,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     bool previous_target_found = this->verifyPreviousTarget(cluster_centers, target_id, target_pos, movement);
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
-    if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
+    if (!previous_target_found || movement > this->predicted_gate_distance_) {
         setFollowTrackingState(FollowTrackingState::TemporarilyLost);
         startLostDebugTimer();
         publishCmdVel(0.0, 0.0);
@@ -831,7 +955,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         publishLostState(false);
         RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
 
-        if (previous_target_found && movement > MOVEMENT_THRESHOLD) {
+        if (previous_target_found && movement > this->predicted_gate_distance_) {
             const double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
             const double target_angle = std::atan2(target_pos.y, target_pos.x);
             const double angle_diff = std::fabs(std::atan2(
@@ -866,7 +990,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                 double distance_diff = calculateDistance(previous_target_pos_, target_pos);
                 last_selection_angle_diff_ = angle_diff;
 
-                if (distance_diff > LOST_DISTANCE_JUMP && angle_diff > LOST_ANGLE_JUMP) {
+                if (distance_diff > this->max_target_distance_jump_ &&
+                    angle_diff > this->max_target_angle_jump_) {
                     RCLCPP_WARN(this->get_logger(),
                                 "selectReacquisitionTarget: 新しい候補(ID %d)が前回位置と大きく異なるため停止 (距離: %.3f, 角度差: %.2f)",
                                 target_id, distance_diff, angle_diff);
@@ -898,7 +1023,9 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
             RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
         } else {
             RCLCPP_WARN(this->get_logger(), "一時ロスト中: 適切な再捕捉候補が見つかりませんでした。");
-            last_rejection_reason_ = "not_found";
+            if (last_rejection_reason_ == "none") {
+                last_rejection_reason_ = "not_found";
+            }
             saveDebugCsv();
             return;
         }
@@ -1021,7 +1148,7 @@ double LegClusterTracking::lostElapsedSeconds() const {
 
 bool LegClusterTracking::targetLostTimedOut() const {
     const auto elapsed = lostElapsedSeconds();
-    return elapsed >= TARGET_LOST_TIMEOUT;
+    return elapsed >= this->target_reacquire_timeout_;
 }
 
 geometry_msgs::msg::Point LegClusterTracking::predictedTargetPosition() const {
@@ -1073,14 +1200,14 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
         return;
     }
     // 31cm以内なら停止
-    if (target_distance <= STOP_DISTANCE_THRESHOLD) {
+    if (target_distance <= this->safety_stop_distance_) {
         // RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");
         cmd_vel_publisher_->publish(cmd_msg); // 速度0を送信
         return;
     }
 
     // 現在の誤差を計算
-    double error_dist = target_distance - STOP_DISTANCE_THRESHOLD;
+    double error_dist = target_distance - this->safety_stop_distance_;
     double error_angle = target_angle; // radian
     // 誤差の積分項を更新（上限制限付き）
     integral_dist += error_dist;
@@ -1210,7 +1337,9 @@ void LegClusterTracking::publishDebugMarkers() {
         // 再捕捉ゲートは「この範囲外なら同一人物として扱わない」目安をRVizで見るために出す。
         auto reacquire_gate_marker = marker_helper_->createMarker(
             "debug_reacquire_gate", 3, visualization_msgs::msg::Marker::CYLINDER,
-            predicted_target_pos, MOVEMENT_THRESHOLD * 2.0, MOVEMENT_THRESHOLD * 2.0,
+            predicted_target_pos,
+            this->predicted_gate_distance_ * 2.0,
+            this->predicted_gate_distance_ * 2.0,
             0.01, -1, 0.1, 0.4, 1.0, 0.18);
         reacquire_gate_marker.pose.position.z = 0.005;
         markers.markers.push_back(reacquire_gate_marker);

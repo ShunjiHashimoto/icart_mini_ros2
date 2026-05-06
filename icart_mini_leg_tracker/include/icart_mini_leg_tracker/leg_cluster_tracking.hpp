@@ -39,6 +39,10 @@
 #define CLUSTER_TOLERANCE 0.05 // ?m以内の点を同じクラスタにする[m]
 #define LOST_CLUSTER_TIMEOUT 1.0 // 失われたクラスタのタイムアウト[s]
 #define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
+#define FOOT_PAIR_MIN_DISTANCE 0.08 // 脚ペアとして近すぎるクラスタを除外する最小距離[m]
+#define FOOT_PAIR_MAX_DISTANCE 0.55 // 歩行中の前後脚開きを許容しつつ、遠すぎる障害物を除外する最大距離[m]
+#define FOOT_PAIR_CENTER_GATE_DISTANCE 0.35 // 脚ペア中心と予測ターゲット位置の許容距離[m]
+#define FOOT_PAIR_MAX_LATERAL_DISTANCE 0.08 // 柱状障害物をsecond脚候補に混ぜないため、横方向に厳しく見る最大距離[m]
 #define STOP_DISTANCE_THRESHOLD 0.35 //[m]
 #define MAX_CLUSTER_DISTANCE 2.5 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
@@ -46,6 +50,8 @@
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
 #define LOST_DISTANCE_JUMP 0.4 //大きく離れたとみなす距離変化[m]
 #define LOST_ANGLE_JUMP (M_PI/2.0) // 大きく離れたとみなす角度変化[rad]
+#define REACQUIRE_MAX_ANGLE_DIFF (M_PI/2.0) // 再捕捉候補として許容する角度変化[rad]
+#define REACQUIRE_MAX_SPEED 5.0 // ID入れ替わり時の速度スパイクを許容し、明らかな異常値だけ除外する上限[m/s]
 #define LOOP_PERIOD_SAMPLE_WINDOW 50 // 平均周期を算出するフレーム数
 #define INITIAL_TARGET_MAX_X 1.0 // 初期追従対象として採用する正面方向の最大距離[m]
 #define INITIAL_TARGET_MAX_ABS_Y 0.5 // 初期追従対象として採用する左右方向の最大距離[m]
@@ -94,6 +100,11 @@ private:
         EmergencyStop
     };
 
+    struct ClusterMotionInfo {
+        double speed = 0.0;
+        bool is_static = false;
+    };
+
     // コールバック関数
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg);
@@ -128,6 +139,7 @@ private:
         const std::map<int, geometry_msgs::msg::Point> &current_centers, 
         const rclcpp::Time &current_time);
     void smoothAndFilterVelocities(const std::map<int, geometry_msgs::msg::Point> &current_centers);
+    ClusterMotionInfo getClusterMotionInfo(int cluster_id) const;
     bool filterClustersByRegion(std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     int initializeTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, geometry_msgs::msg::Point &target_pos);
     bool verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement);
@@ -143,6 +155,7 @@ private:
     void handleTargetLostTimeout();
     void resetFollowTarget();
     void clearLastSelectionInfo();
+    void loadTrackingParameters();
     void setFollowTrackingState(FollowTrackingState state);
     const char *followTrackingStateName(FollowTrackingState state) const;
     void startLostDebugTimer();
@@ -204,6 +217,22 @@ private:
     rclcpp::Time target_lost_start_time_;
     bool has_rejected_candidate_;
     geometry_msgs::msg::Point rejected_candidate_pos_;
+
+    double target_reacquire_timeout_;
+    double predicted_gate_distance_;
+    double max_target_angle_jump_;
+    double max_target_distance_jump_;
+    double reacquire_max_angle_diff_;
+    double reacquire_max_speed_;
+    double leg_pair_min_distance_;
+    double leg_pair_max_distance_;
+    double leg_pair_center_gate_distance_;
+    double leg_pair_max_lateral_distance_;
+    double initial_target_max_x_;
+    double initial_target_max_abs_y_;
+    double static_speed_threshold_;
+    int static_frame_limit_;
+    double safety_stop_distance_;
 
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;
