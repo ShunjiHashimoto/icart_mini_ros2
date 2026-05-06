@@ -13,6 +13,7 @@ LegClusterTracking::LegClusterTracking() :
     start_followme_flag(false),
     is_target_initialized_(false), 
     stop_by_joystick_(false),
+    follow_tracking_state_(FollowTrackingState::Idle),
     debug_tracking_state_("idle"),
     target_lost_timer_active_(false),
     has_rejected_candidate_(false),
@@ -95,7 +96,7 @@ void LegClusterTracking::followControlCallback(const std_msgs::msg::String::Shar
 void LegClusterTracking::startFollowMe(const std::string &source) {
     resetFollowTarget();
     start_followme_flag = true;
-    debug_tracking_state_ = "waiting_initial";
+    setFollowTrackingState(FollowTrackingState::WaitingInitial);
     RCLCPP_WARN(this->get_logger(), "追従開始 (%s)", source.c_str());
     publishLostState(false);
 }
@@ -103,7 +104,7 @@ void LegClusterTracking::startFollowMe(const std::string &source) {
 void LegClusterTracking::stopFollowMe(const std::string &source) {
     start_followme_flag = false;
     resetFollowTarget();
-    debug_tracking_state_ = "stopped";
+    setFollowTrackingState(FollowTrackingState::Stopped);
     publishCmdVel(0.0, 0.0);
     RCLCPP_WARN(this->get_logger(), "追従停止 (%s)", source.c_str());
     publishLostState(true);
@@ -112,7 +113,7 @@ void LegClusterTracking::stopFollowMe(const std::string &source) {
 void LegClusterTracking::setEmergencyStop(bool enabled, const std::string &source) {
     stop_by_joystick_ = enabled;
     if (enabled) {
-        debug_tracking_state_ = "emergency_stop";
+        setFollowTrackingState(FollowTrackingState::EmergencyStop);
         publishCmdVel(0.0, 0.0);
         publishLostState(true);
         RCLCPP_WARN(this->get_logger(), "非常停止 (%s)", source.c_str());
@@ -216,7 +217,12 @@ std::vector<int> LegClusterTracking::makeClustersPCL(const std::vector<geometry_
         cloud->points.push_back(pcl_point);
         cloud_to_points_index.push_back(i);  // このcloud点は元のpoints[i]に対応
     }
-        
+
+    std::vector<int> clusters(points.size(), 0);
+    if (cloud->points.empty()) {
+        return clusters;
+    }
+
     // KD-Treeを作成
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     tree->setInputCloud(cloud);
@@ -231,7 +237,6 @@ std::vector<int> LegClusterTracking::makeClustersPCL(const std::vector<geometry_
     ec.extract(cluster_indices);
 
     // クラスタリング実行
-    std::vector<int> clusters(points.size(), 0);
     int cluster_id = 1;
     for (const auto &indices : cluster_indices) {
         for (int idx : indices.indices) {
@@ -726,15 +731,53 @@ void LegClusterTracking::updateTrackingState(int target_id, int second_id, geome
     previous_target_pos_ = target_pos;
 }
 
+void LegClusterTracking::handleInitialTargetNotFound() {
+    RCLCPP_WARN(this->get_logger(), "初期追従対象が見つかりませんでした。");
+    setFollowTrackingState(FollowTrackingState::Lost);
+    target_id = -1;
+    previous_target_id_ = -1;
+    previous_second_id_ = -1;
+    current_target_id_ = -1;
+    current_second_id_ = -1;
+    previous_target_pos_ = geometry_msgs::msg::Point();
+    startLostDebugTimer();
+    publishCmdVel(0.0, 0.0);
+    publishLostState(true);
+    saveDebugCsv();
+    start_followme_flag = false;
+}
+
+void LegClusterTracking::handleTargetLostTimeout() {
+    RCLCPP_WARN(
+        this->get_logger(),
+        "追従対象を %.2f 秒以上再捕捉できないためLostに遷移します。",
+        TARGET_LOST_TIMEOUT);
+    setFollowTrackingState(FollowTrackingState::Lost);
+    current_target_id_ = -1;
+    current_second_id_ = -1;
+    last_rejection_reason_ = "target_lost_timeout";
+    publishCmdVel(0.0, 0.0);
+    publishLostState(true);
+    saveDebugCsv();
+    publishDebugMarkers();
+    start_followme_flag = false;
+}
+
 void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
     // 【1】最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
     clearLastSelectionInfo();
-    if (cluster_centers.empty()) {
-        debug_tracking_state_ = is_target_initialized_ ? "temporarily_lost" : "lost";
-        startLostDebugTimer();
+    if (cluster_centers.empty() && is_target_initialized_) {
         publishCmdVel(0.0, 0.0);  // 停止指令を送信
-        // 一時ロストはデバッグ状態で表し、/is_lost_target は最終Lostだけに使う。
-        publishLostState(!is_target_initialized_);
+
+        setFollowTrackingState(FollowTrackingState::TemporarilyLost);
+        startLostDebugTimer();
+        // 一時ロスト中は前回ターゲット情報を保持し、予測方向への移動は行わない。
+        if (targetLostTimedOut()) {
+            handleTargetLostTimeout();
+            return;
+        }
+        publishLostState(false);
+
         saveDebugCsv();
         return;
     }
@@ -742,12 +785,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     if (!is_target_initialized_) {
         int target_id = this->initializeTarget(cluster_centers, target_pos);
         if (target_id == -1) {
-            RCLCPP_WARN(this->get_logger(), "初期追従対象が見つかりませんでした。");
-            debug_tracking_state_ = "lost";
-            startLostDebugTimer();
-            publishCmdVel(0.0, 0.0);
-            publishLostState(true);
-            saveDebugCsv();
+            handleInitialTargetNotFound();
             return;
         }
 
@@ -757,7 +795,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         previous_target_pos_ = target_pos;
         current_target_id_ = target_id;
         current_second_id_ = -1;
-        debug_tracking_state_ = "tracking";
+        setFollowTrackingState(FollowTrackingState::Tracking);
         clearLostDebugTimer();
         // RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
         return;
@@ -769,10 +807,16 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
-        debug_tracking_state_ = "reacquiring";
+        setFollowTrackingState(FollowTrackingState::TemporarilyLost);
         startLostDebugTimer();
         publishCmdVel(0.0, 0.0);
+        if (targetLostTimedOut()) {
+            handleTargetLostTimeout();
+            return;
+        }
+        publishLostState(false);
         RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
+
         if (auto new_target = selectNewTarget(cluster_centers, previous_target_found)) {
             target_id = new_target->first;
             target_pos = new_target->second;
@@ -793,7 +837,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                     publishLostState(true);
                     current_target_id_ = -1;
                     current_second_id_ = -1;
-                    debug_tracking_state_ = "lost";
+                    setFollowTrackingState(FollowTrackingState::Lost);
 
                     last_selection_called_ = true;
                     last_selection_target_id_ = -1;
@@ -809,28 +853,19 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                     saveDebugCsv();
                     publishDebugMarkers();
                     start_followme_flag = false;
-                    resetFollowTarget();
                     return;
                 }
             }
-            debug_tracking_state_ = "reacquired";
+            setFollowTrackingState(FollowTrackingState::Tracking);
             RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
         } else {
-            RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
-            debug_tracking_state_ = "lost";
-            publishCmdVel(0.0, 0.0);
-            publishLostState(true);
-            this->current_target_id_ = -1;
-            this->current_second_id_ = -1;
+            RCLCPP_WARN(this->get_logger(), "一時ロスト中: 適切な再捕捉候補が見つかりませんでした。");
             last_rejection_reason_ = "not_found";
             saveDebugCsv();
-            publishDebugMarkers();
-            start_followme_flag = false;
-            resetFollowTarget();
             return;
         }
     } else {
-        debug_tracking_state_ = "tracking";
+        setFollowTrackingState(FollowTrackingState::Tracking);
     }
 
     // 【4】近くにもう1つのクラスタがあるかチェック
@@ -855,11 +890,12 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
     double distance_to_target = sqrt(target_pos.x * target_pos.x + target_pos.y * target_pos.y);
 
     // RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
+    setFollowTrackingState(FollowTrackingState::Tracking);
+    clearLostDebugTimer();
     publishCmdVel(distance_to_target, angle_to_target);
     publishLostState(false);
 
     saveDebugCsv();
-    clearLostDebugTimer();
 }
 
 void LegClusterTracking::resetFollowTarget() {
@@ -877,8 +913,13 @@ void LegClusterTracking::resetFollowTarget() {
     next_cluster_id_ = 1;
     integral_dist = 0.0;
     integral_angle = 0.0;
+    target_id = -1;
+    previous_target_id_ = -1;
+    previous_second_id_ = -1;
+    current_target_id_ = -1;
+    current_second_id_ = -1;
     previous_target_pos_ =  geometry_msgs::msg::Point();
-    debug_tracking_state_ = "idle";
+    setFollowTrackingState(FollowTrackingState::Idle);
     clearLostDebugTimer();
     clearLastSelectionInfo();
 }
@@ -894,6 +935,31 @@ void LegClusterTracking::clearLastSelectionInfo() {
     last_rejection_reason_ = "none";
     has_rejected_candidate_ = false;
     rejected_candidate_pos_ = geometry_msgs::msg::Point();
+}
+
+void LegClusterTracking::setFollowTrackingState(FollowTrackingState state) {
+    follow_tracking_state_ = state;
+    debug_tracking_state_ = followTrackingStateName(state);
+}
+
+const char *LegClusterTracking::followTrackingStateName(FollowTrackingState state) const {
+    switch (state) {
+        case FollowTrackingState::Idle:
+            return "idle";
+        case FollowTrackingState::WaitingInitial:
+            return "waiting_initial";
+        case FollowTrackingState::Tracking:
+            return "tracking";
+        case FollowTrackingState::TemporarilyLost:
+            return "temporarily_lost";
+        case FollowTrackingState::Lost:
+            return "lost";
+        case FollowTrackingState::Stopped:
+            return "stopped";
+        case FollowTrackingState::EmergencyStop:
+            return "emergency_stop";
+    }
+    return "unknown";
 }
 
 void LegClusterTracking::startLostDebugTimer() {
@@ -913,6 +979,11 @@ double LegClusterTracking::lostElapsedSeconds() const {
         return -1.0;
     }
     return (this->now() - target_lost_start_time_).seconds();
+}
+
+bool LegClusterTracking::targetLostTimedOut() const {
+    const auto elapsed = lostElapsedSeconds();
+    return elapsed >= TARGET_LOST_TIMEOUT;
 }
 
 geometry_msgs::msg::Point LegClusterTracking::predictedTargetPosition() const {

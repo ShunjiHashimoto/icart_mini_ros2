@@ -49,6 +49,7 @@
 #define LOOP_PERIOD_SAMPLE_WINDOW 50 // 平均周期を算出するフレーム数
 #define INITIAL_TARGET_MAX_X 1.0 // 初期追従対象として採用する正面方向の最大距離[m]
 #define INITIAL_TARGET_MAX_ABS_Y 0.5 // 初期追従対象として採用する左右方向の最大距離[m]
+#define TARGET_LOST_TIMEOUT 1.0 // 一時ロストから最終Lostへ遷移するまでの待ち時間[s]
 
 // 速度制限
 // #define MAX_SPEED 2.0 // BLDC用
@@ -83,6 +84,16 @@ public:
     LegClusterTracking();
     
 private:
+    enum class FollowTrackingState {
+        Idle,
+        WaitingInitial,
+        Tracking,
+        TemporarilyLost,
+        Lost,
+        Stopped,
+        EmergencyStop
+    };
+
     // コールバック関数
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg);
@@ -129,11 +140,16 @@ private:
         const geometry_msgs::msg::Point &primary_target_pos);
     void updateTrackingState(int target_id, int second_id, geometry_msgs::msg::Point target_pos);
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
+    void handleInitialTargetNotFound();
+    void handleTargetLostTimeout();
     void resetFollowTarget();
     void clearLastSelectionInfo();
+    void setFollowTrackingState(FollowTrackingState state);
+    const char *followTrackingStateName(FollowTrackingState state) const;
     void startLostDebugTimer();
     void clearLostDebugTimer();
     double lostElapsedSeconds() const;
+    bool targetLostTimedOut() const;
     geometry_msgs::msg::Point predictedTargetPosition() const;
     void saveDebugCsv();
 
@@ -183,6 +199,7 @@ private:
     double last_selection_angle_diff_;
     double last_selection_timestamp_;
     std::string last_rejection_reason_;
+    FollowTrackingState follow_tracking_state_;
     std::string debug_tracking_state_;
     bool target_lost_timer_active_;
     rclcpp::Time target_lost_start_time_;
