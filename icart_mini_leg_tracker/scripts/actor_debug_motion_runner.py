@@ -81,6 +81,26 @@ class ActorDebugMotionRunner(Node):
                 MotionSegment(self.duration, self.linear_speed, 0.0, -self.turn_angular_speed),
                 MotionSegment(20.0, self.linear_speed, 0.0, 0.0),
             ]
+        if self.motion_scenario == 'diagonal_walk':
+            # Actor pluginは横速度を使わないため、短く旋回してから直進し、斜め歩行を再現する。
+            return [
+                MotionSegment(2.0, self.linear_speed, 0.0, self.turn_angular_speed),
+                MotionSegment(self.duration, self.linear_speed, 0.0, 0.0),
+            ]
+        if self.motion_scenario == 'front_crossing':
+            # ロボット前方を軽く横切るよう、近めの初期位置から左旋回しながら通過する。
+            return [
+                MotionSegment(self.duration, self.linear_speed, 0.0, self.turn_angular_speed),
+                MotionSegment(2.0, self.linear_speed, 0.0, 0.0),
+            ]
+        if self.motion_scenario == 'turning_forward_walk':
+            # 前進しながら左右へ向きを変え、脚の見え方が変わる状態を継続的に作る。
+            return [
+                MotionSegment(4.0, self.linear_speed, 0.0, self.turn_angular_speed),
+                MotionSegment(4.0, self.linear_speed, 0.0, -self.turn_angular_speed),
+                MotionSegment(4.0, self.linear_speed, 0.0, self.turn_angular_speed),
+                MotionSegment(4.0, self.linear_speed, 0.0, 0.0),
+            ]
         self.get_logger().warn(
             f'Unknown motion_scenario [{self.motion_scenario}], falling back to straight.'
         )
