@@ -155,6 +155,8 @@ def launch_setup(context, *args, **kwargs):
             executable='leg_cluster_tracking_node',
             name='leg_cluster_tracking_node',
             output='screen',
+            # 追従ノード内の経過時間やmarker時刻をGazeboのsim timeに合わせる。
+            parameters=[{'use_sim_time': use_sim_time}],
         ),
 
         Node(
