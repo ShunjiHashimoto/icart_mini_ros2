@@ -13,6 +13,9 @@ LegClusterTracking::LegClusterTracking() :
     start_followme_flag(false),
     is_target_initialized_(false), 
     stop_by_joystick_(false),
+    debug_tracking_state_("idle"),
+    target_lost_timer_active_(false),
+    has_rejected_candidate_(false),
     marker_helper_(std::make_shared<MarkerHelper>(1000)), 
     csv_logger_(std::make_shared<CSVLogger>(FILENAME)),
     accumulated_loop_period_(0.0),
@@ -34,13 +37,20 @@ LegClusterTracking::LegClusterTracking() :
     center_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/cluster_centers", 10);
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
     person_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/person_marker", 10);
+    debug_marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/leg_tracker/debug_markers", 10);
     cluster_info_publisher_ = this->create_publisher<icart_msg::ClusterInfoArray>("/leg_tracker/cluster_infos", 10);
     is_lost_target_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/leg_tracker/is_lost_target", 10);
 
     RCLCPP_INFO(this->get_logger(), "Leg cluster and tracking started.");
 
+    target_id = -1;
+    previous_target_id_ = -1;
+    previous_second_id_ = -1;
+    current_target_id_ = -1;
+    current_second_id_ = -1;
     clearLastSelectionInfo();
 
+    target_lost_start_time_ = this->now();
     last_callback_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
     publishLostState(false);
 }
@@ -85,6 +95,7 @@ void LegClusterTracking::followControlCallback(const std_msgs::msg::String::Shar
 void LegClusterTracking::startFollowMe(const std::string &source) {
     resetFollowTarget();
     start_followme_flag = true;
+    debug_tracking_state_ = "waiting_initial";
     RCLCPP_WARN(this->get_logger(), "追従開始 (%s)", source.c_str());
     publishLostState(false);
 }
@@ -92,6 +103,7 @@ void LegClusterTracking::startFollowMe(const std::string &source) {
 void LegClusterTracking::stopFollowMe(const std::string &source) {
     start_followme_flag = false;
     resetFollowTarget();
+    debug_tracking_state_ = "stopped";
     publishCmdVel(0.0, 0.0);
     RCLCPP_WARN(this->get_logger(), "追従停止 (%s)", source.c_str());
     publishLostState(true);
@@ -100,6 +112,7 @@ void LegClusterTracking::stopFollowMe(const std::string &source) {
 void LegClusterTracking::setEmergencyStop(bool enabled, const std::string &source) {
     stop_by_joystick_ = enabled;
     if (enabled) {
+        debug_tracking_state_ = "emergency_stop";
         publishCmdVel(0.0, 0.0);
         publishLostState(true);
         RCLCPP_WARN(this->get_logger(), "非常停止 (%s)", source.c_str());
@@ -137,6 +150,7 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
     } else {
         trackClusters(cluster_centers);
         followTarget(cluster_centers);
+        publishDebugMarkers();
         publishClusterMarkers(points, clusters);
         publishMatchedClusterCenters(cluster_centers);
         publishClusterInfoMap();
@@ -673,6 +687,14 @@ LegClusterTracking::selectNewTarget(const std::map<int, geometry_msgs::msg::Poin
 
     last_selection_target_id_ = new_target_id;
     last_selection_distance_to_robot_ = dist_to_robot;
+    if (is_target_initialized_) {
+        const double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
+        const double new_angle = std::atan2(new_target_pos.y, new_target_pos.x);
+        const double angle_diff = std::atan2(
+            std::sin(new_angle - previous_angle),
+            std::cos(new_angle - previous_angle));
+        last_selection_angle_diff_ = std::fabs(angle_diff);
+    }
 
     return std::make_pair(new_target_id, new_target_pos);
 }
@@ -706,12 +728,14 @@ void LegClusterTracking::updateTrackingState(int target_id, int second_id, geome
 
 void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers) {
     // 【1】最初のフレームでは、ロボットの前方（x > 0）の最も近いクラスタを選ぶ
-    std_msgs::msg::Bool is_lost_target;
-    is_lost_target.data = true;
     clearLastSelectionInfo();
     if (cluster_centers.empty()) {
+        debug_tracking_state_ = is_target_initialized_ ? "temporarily_lost" : "lost";
+        startLostDebugTimer();
         publishCmdVel(0.0, 0.0);  // 停止指令を送信
-        is_lost_target_publisher_->publish(is_lost_target);
+        // 一時ロストはデバッグ状態で表し、/is_lost_target は最終Lostだけに使う。
+        publishLostState(!is_target_initialized_);
+        saveDebugCsv();
         return;
     }
     geometry_msgs::msg::Point target_pos;
@@ -719,8 +743,11 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         int target_id = this->initializeTarget(cluster_centers, target_pos);
         if (target_id == -1) {
             RCLCPP_WARN(this->get_logger(), "初期追従対象が見つかりませんでした。");
+            debug_tracking_state_ = "lost";
+            startLostDebugTimer();
             publishCmdVel(0.0, 0.0);
-            is_lost_target_publisher_->publish(is_lost_target);
+            publishLostState(true);
+            saveDebugCsv();
             return;
         }
 
@@ -728,6 +755,10 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
         previous_target_id_ = target_id;
         previous_second_id_ = -1;
         previous_target_pos_ = target_pos;
+        current_target_id_ = target_id;
+        current_second_id_ = -1;
+        debug_tracking_state_ = "tracking";
+        clearLostDebugTimer();
         // RCLCPP_INFO(this->get_logger(), "初期追従対象ID: %d", target_id);
         return;
     }
@@ -738,6 +769,8 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // 【3】前回の追従対象が見つからなかった場合 or 移動が大きすぎる場合、新しい対象を探す
     if (!previous_target_found || movement > MOVEMENT_THRESHOLD) {
+        debug_tracking_state_ = "reacquiring";
+        startLostDebugTimer();
         publishCmdVel(0.0, 0.0);
         RCLCPP_INFO(this->get_logger(), "前回の追従対象をロスト, movement: %lf", movement);
         if (auto new_target = selectNewTarget(cluster_centers, previous_target_found)) {
@@ -749,6 +782,7 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                 double angle_diff = std::atan2(std::sin(new_angle - previous_angle), std::cos(new_angle - previous_angle));
                 angle_diff = std::fabs(angle_diff);
                 double distance_diff = calculateDistance(previous_target_pos_, target_pos);
+                last_selection_angle_diff_ = angle_diff;
 
                 if (distance_diff > LOST_DISTANCE_JUMP && angle_diff > LOST_ANGLE_JUMP) {
                     RCLCPP_WARN(this->get_logger(),
@@ -756,55 +790,47 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
                                 target_id, distance_diff, angle_diff);
 
                     publishCmdVel(0.0, 0.0);
-                    is_lost_target_publisher_->publish(is_lost_target);
+                    publishLostState(true);
                     current_target_id_ = -1;
                     current_second_id_ = -1;
+                    debug_tracking_state_ = "lost";
 
                     last_selection_called_ = true;
                     last_selection_target_id_ = -1;
                     last_selection_reason_ = "jump_detected";
                     last_selection_movement_ = distance_diff;
                     last_selection_distance_to_robot_ = std::hypot(target_pos.x, target_pos.y);
+                    last_selection_angle_diff_ = angle_diff;
+                    last_rejection_reason_ = "jump_detected";
                     last_selection_timestamp_ = this->now().seconds();
+                    has_rejected_candidate_ = true;
+                    rejected_candidate_pos_ = target_pos;
 
-                    csv_logger_->saveClusterData(
-                        cluster_id_history_,
-                        cluster_info_map_,
-                        current_target_id_,
-                        current_second_id_,
-                        last_selection_called_,
-                        last_selection_target_id_,
-                        last_selection_reason_,
-                        last_selection_movement_,
-                        last_selection_distance_to_robot_,
-                        last_selection_timestamp_);
+                    saveDebugCsv();
+                    publishDebugMarkers();
                     start_followme_flag = false;
                     resetFollowTarget();
                     return;
                 }
             }
+            debug_tracking_state_ = "reacquired";
             RCLCPP_INFO(this->get_logger(), "新しい追従対象 (ID: %d) を選択", target_id);
         } else {
             RCLCPP_WARN(this->get_logger(), "適切な追従対象が見つかりませんでした。");
+            debug_tracking_state_ = "lost";
             publishCmdVel(0.0, 0.0);
-            is_lost_target_publisher_->publish(is_lost_target);
+            publishLostState(true);
             this->current_target_id_ = -1;
             this->current_second_id_ = -1;
-            csv_logger_->saveClusterData(
-                cluster_id_history_,
-                cluster_info_map_,
-                current_target_id_,
-                current_second_id_,
-                last_selection_called_,
-                last_selection_target_id_,
-                last_selection_reason_,
-                last_selection_movement_,
-                last_selection_distance_to_robot_,
-                last_selection_timestamp_);
+            last_rejection_reason_ = "not_found";
+            saveDebugCsv();
+            publishDebugMarkers();
             start_followme_flag = false;
             resetFollowTarget();
             return;
         }
+    } else {
+        debug_tracking_state_ = "tracking";
     }
 
     // 【4】近くにもう1つのクラスタがあるかチェック
@@ -830,20 +856,10 @@ void LegClusterTracking::followTarget(const std::map<int, geometry_msgs::msg::Po
 
     // RCLCPP_INFO(this->get_logger(), "追従目標位置: (%.2f, %.2f)", target_pos.x, target_pos.y);
     publishCmdVel(distance_to_target, angle_to_target);
-    is_lost_target.data = false;
-    is_lost_target_publisher_->publish(is_lost_target);
+    publishLostState(false);
 
-    csv_logger_->saveClusterData(
-        cluster_id_history_,
-        cluster_info_map_,
-        current_target_id_,
-        current_second_id_,
-        last_selection_called_,
-        last_selection_target_id_,
-        last_selection_reason_,
-        last_selection_movement_,
-        last_selection_distance_to_robot_,
-        last_selection_timestamp_);
+    saveDebugCsv();
+    clearLostDebugTimer();
 }
 
 void LegClusterTracking::resetFollowTarget() {
@@ -862,6 +878,8 @@ void LegClusterTracking::resetFollowTarget() {
     integral_dist = 0.0;
     integral_angle = 0.0;
     previous_target_pos_ =  geometry_msgs::msg::Point();
+    debug_tracking_state_ = "idle";
+    clearLostDebugTimer();
     clearLastSelectionInfo();
 }
 
@@ -871,7 +889,69 @@ void LegClusterTracking::clearLastSelectionInfo() {
     last_selection_reason_ = "none";
     last_selection_movement_ = -1.0;
     last_selection_distance_to_robot_ = -1.0;
+    last_selection_angle_diff_ = -1.0;
     last_selection_timestamp_ = -1.0;
+    last_rejection_reason_ = "none";
+    has_rejected_candidate_ = false;
+    rejected_candidate_pos_ = geometry_msgs::msg::Point();
+}
+
+void LegClusterTracking::startLostDebugTimer() {
+    if (!target_lost_timer_active_) {
+        target_lost_start_time_ = this->now();
+        target_lost_timer_active_ = true;
+    }
+}
+
+void LegClusterTracking::clearLostDebugTimer() {
+    target_lost_timer_active_ = false;
+    target_lost_start_time_ = this->now();
+}
+
+double LegClusterTracking::lostElapsedSeconds() const {
+    if (!target_lost_timer_active_) {
+        return -1.0;
+    }
+    return (this->now() - target_lost_start_time_).seconds();
+}
+
+geometry_msgs::msg::Point LegClusterTracking::predictedTargetPosition() const {
+    auto predicted = previous_target_pos_;
+    if (!is_target_initialized_) {
+        return predicted;
+    }
+
+    const int velocity_id = previous_target_id_ != -1 ? previous_target_id_ : previous_second_id_;
+    const auto velocity_it = cluster_info_map_.find(velocity_id);
+    if (velocity_it == cluster_info_map_.end()) {
+        return predicted;
+    }
+
+    const auto elapsed = previous_time_.nanoseconds() == 0 ?
+        0.0 : (this->now() - previous_time_).seconds();
+    predicted.x += velocity_it->second.velocity.x * elapsed * PREDICTED_VEL_GAIN;
+    predicted.y += velocity_it->second.velocity.y * elapsed * PREDICTED_VEL_GAIN;
+    return predicted;
+}
+
+void LegClusterTracking::saveDebugCsv() {
+    csv_logger_->saveClusterData(
+        cluster_id_history_,
+        cluster_info_map_,
+        current_target_id_,
+        current_second_id_,
+        last_selection_called_,
+        last_selection_target_id_,
+        last_selection_reason_,
+        last_selection_movement_,
+        last_selection_distance_to_robot_,
+        last_selection_timestamp_,
+        debug_tracking_state_,
+        lostElapsedSeconds(),
+        previous_target_pos_,
+        predictedTargetPosition(),
+        last_selection_angle_diff_,
+        last_rejection_reason_);
 }
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
@@ -990,6 +1070,67 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);
+}
+
+void LegClusterTracking::publishDebugMarkers() {
+    if (!debug_marker_publisher_) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray markers;
+    visualization_msgs::msg::Marker clear_marker;
+    clear_marker.header.frame_id = "laser";
+    clear_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+    markers.markers.push_back(clear_marker);
+
+    // RVizには最新のTFで表示してほしいため、debug markerはstamp=0のままにする。
+    // シミュレーション時刻とwall時刻が混在すると、now()を入れたmarkerだけ
+    // 「その時刻の laser->odom TF がない」エラーになりやすい。
+    if (is_target_initialized_) {
+        auto current_target_marker = marker_helper_->createMarker(
+            "debug_current_target", 1, visualization_msgs::msg::Marker::SPHERE,
+            previous_target_pos_, 0.16, 0.16, 0.16, -1, 0.0, 1.0, 0.0, 0.8);
+        markers.markers.push_back(current_target_marker);
+
+        const auto predicted_target_pos = predictedTargetPosition();
+        auto predicted_target_marker = marker_helper_->createMarker(
+            "debug_predicted_target", 2, visualization_msgs::msg::Marker::SPHERE,
+            predicted_target_pos, 0.12, 0.12, 0.12, -1, 0.1, 0.4, 1.0, 0.8);
+        markers.markers.push_back(predicted_target_marker);
+
+        // 再捕捉ゲートは「この範囲外なら同一人物として扱わない」目安をRVizで見るために出す。
+        auto reacquire_gate_marker = marker_helper_->createMarker(
+            "debug_reacquire_gate", 3, visualization_msgs::msg::Marker::CYLINDER,
+            predicted_target_pos, MOVEMENT_THRESHOLD * 2.0, MOVEMENT_THRESHOLD * 2.0,
+            0.01, -1, 0.1, 0.4, 1.0, 0.18);
+        reacquire_gate_marker.pose.position.z = 0.005;
+        markers.markers.push_back(reacquire_gate_marker);
+    }
+
+    auto state_text_pos = previous_target_pos_;
+    state_text_pos.z += 0.45;
+    auto state_text_marker = marker_helper_->createMarker(
+        "debug_tracking_state", 4, visualization_msgs::msg::Marker::TEXT_VIEW_FACING,
+        state_text_pos, 0.0, 0.0, 0.16, -1, 1.0, 1.0, 1.0, 0.9);
+    state_text_marker.text = debug_tracking_state_;
+    markers.markers.push_back(state_text_marker);
+
+    if (has_rejected_candidate_) {
+        auto rejected_candidate_marker = marker_helper_->createMarker(
+            "debug_rejected_candidate", 10, visualization_msgs::msg::Marker::CUBE,
+            rejected_candidate_pos_, 0.16, 0.16, 0.16, -1, 1.0, 0.0, 0.0, 0.85);
+        markers.markers.push_back(rejected_candidate_marker);
+
+        auto rejected_text_pos = rejected_candidate_pos_;
+        rejected_text_pos.z += 0.28;
+        auto rejected_text_marker = marker_helper_->createMarker(
+            "debug_rejected_candidate_text", 11, visualization_msgs::msg::Marker::TEXT_VIEW_FACING,
+            rejected_text_pos, 0.0, 0.0, 0.13, -1, 1.0, 0.2, 0.2, 0.9);
+        rejected_text_marker.text = "reject: " + last_rejection_reason_;
+        markers.markers.push_back(rejected_text_marker);
+    }
+
+    debug_marker_publisher_->publish(markers);
 }
 
 void LegClusterTracking::publishLostState(bool lost) {

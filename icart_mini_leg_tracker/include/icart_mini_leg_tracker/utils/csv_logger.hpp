@@ -23,7 +23,13 @@ public:
                          bool select_called, int selected_target_id,
                          const std::string &selection_reason,
                          double selection_movement, double selection_distance_to_robot,
-                         double selection_timestamp);
+                         double selection_timestamp,
+                         const std::string &tracking_state,
+                         double lost_elapsed,
+                         const geometry_msgs::msg::Point &previous_target_pos,
+                         const geometry_msgs::msg::Point &predicted_target_pos,
+                         double selection_angle_diff,
+                         const std::string &rejection_reason);
 
 private:
     std::string filename_;

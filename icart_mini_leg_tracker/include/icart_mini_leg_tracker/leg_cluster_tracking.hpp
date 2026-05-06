@@ -17,6 +17,7 @@
 #include <random>
 #include <iomanip> 
 #include <limits>
+#include <optional>
 #include <string>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -130,11 +131,17 @@ private:
     void followTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers);
     void resetFollowTarget();
     void clearLastSelectionInfo();
+    void startLostDebugTimer();
+    void clearLostDebugTimer();
+    double lostElapsedSeconds() const;
+    geometry_msgs::msg::Point predictedTargetPosition() const;
+    void saveDebugCsv();
 
     // 可視化関連
     void publishClusterMarkers(const std::vector<geometry_msgs::msg::Point> &points, const std::vector<int> &clusters);
     void publishMatchedClusterCenters(const std::map<int, geometry_msgs::msg::Point> &current_centers);
     void publishPersonMarker(const geometry_msgs::msg::Point &target_pos);
+    void publishDebugMarkers();
     void publishClusterInfoMap();
     
     // 移動制御
@@ -173,7 +180,14 @@ private:
     std::string last_selection_reason_;
     double last_selection_movement_;
     double last_selection_distance_to_robot_;
+    double last_selection_angle_diff_;
     double last_selection_timestamp_;
+    std::string last_rejection_reason_;
+    std::string debug_tracking_state_;
+    bool target_lost_timer_active_;
+    rclcpp::Time target_lost_start_time_;
+    bool has_rejected_candidate_;
+    geometry_msgs::msg::Point rejected_candidate_pos_;
 
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;
@@ -189,6 +203,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr follow_control_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr cluster_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr person_marker_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_marker_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_marker_publisher_;
     rclcpp::Publisher<icart_msg::ClusterInfoArray>::SharedPtr cluster_info_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
