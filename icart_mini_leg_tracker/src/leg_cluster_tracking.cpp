@@ -675,21 +675,57 @@ int LegClusterTracking::initializeTarget(const std::map<int, geometry_msgs::msg:
 
 // 追従対象がまだ存在しているか確認する関数
 bool LegClusterTracking::verifyPreviousTarget(const std::map<int, geometry_msgs::msg::Point> &cluster_centers, int &target_id, geometry_msgs::msg::Point &target_pos, double &movement) {
+    target_id = -1;
+    movement = std::numeric_limits<double>::max();
+
     if (previous_target_id_ != -1 && cluster_centers.count(previous_target_id_)) {
         geometry_msgs::msg::Point current_pos = cluster_centers.at(previous_target_id_);
-        target_id = previous_target_id_;
-        target_pos = current_pos;
-        movement = calculateDistance(current_pos, previous_target_pos_);
-        // RCLCPP_INFO(this->get_logger(), "前回の追従対象1 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
-        return true;
-    } else if (previous_second_id_ != -1 && cluster_centers.count(previous_second_id_)) {
-        geometry_msgs::msg::Point current_pos = cluster_centers.at(previous_second_id_);
-        target_pos = current_pos;
-        target_id = previous_second_id_;
-        movement = calculateDistance(current_pos, previous_target_pos_);
-        // RCLCPP_INFO(this->get_logger(), "前回の追従対象2 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
-        return true;
+        const double target_movement = calculateDistance(current_pos, previous_target_pos_);
+        movement = target_movement;
+        if (target_movement <= this->predicted_gate_distance_) {
+            target_id = previous_target_id_;
+            target_pos = current_pos;
+            // RCLCPP_INFO(this->get_logger(), "前回の追従対象1 (ID: %d) を継続 [移動距離: %.3f]", target_id, movement);
+            return true;
+        }
     }
+
+    if (previous_second_id_ != -1 && cluster_centers.count(previous_second_id_)) {
+        geometry_msgs::msg::Point current_pos = cluster_centers.at(previous_second_id_);
+        const double second_movement = calculateDistance(current_pos, previous_target_pos_);
+        movement = std::min(movement, second_movement);
+        if (second_movement <= this->predicted_gate_distance_) {
+            target_pos = current_pos;
+            target_id = previous_second_id_;
+            movement = second_movement;
+
+            // primary側が柱などへ大きくジャンプした場合でも、前回secondが人物中心付近に
+            // 残っていれば追従を継続する。パラメータだけ広げると障害物を許容しやすいため、
+            // IDの入れ替わりとして扱える場合だけ救済する。
+            RCLCPP_INFO(
+                this->get_logger(),
+                "前回second ID %d をprimaryへ昇格して追従継続 (movement=%.3f)",
+                target_id, movement);
+            last_selection_called_ = true;
+            last_selection_target_id_ = target_id;
+            last_selection_reason_ = "previous_second_rescue";
+            last_selection_movement_ = movement;
+            last_selection_distance_to_robot_ = std::hypot(target_pos.x, target_pos.y);
+            const double previous_angle = std::atan2(previous_target_pos_.y, previous_target_pos_.x);
+            const double target_angle = std::atan2(target_pos.y, target_pos.x);
+            last_selection_angle_diff_ = std::fabs(std::atan2(
+                std::sin(target_angle - previous_angle),
+                std::cos(target_angle - previous_angle)));
+            last_selection_timestamp_ = this->now().seconds();
+            if (previous_target_id_ != -1 && cluster_centers.count(previous_target_id_)) {
+                last_rejection_reason_ = "primary_movement_threshold";
+                has_rejected_candidate_ = true;
+                rejected_candidate_pos_ = cluster_centers.at(previous_target_id_);
+            }
+            return true;
+        }
+    }
+
     // RCLCPP_INFO(this->get_logger(), "前回の追従対象（ID: %d）をロスト", target_id);
     movement = 0.0;
     return false;
@@ -848,16 +884,96 @@ LegClusterTracking::findSecondaryCluster(const std::map<int, geometry_msgs::msg:
                                          const geometry_msgs::msg::Point &primary_target_pos) {
     int second_id = -1;
     geometry_msgs::msg::Point second_center;
+    const auto predicted_target_pos = predictedTargetPosition();
+    double best_score = std::numeric_limits<double>::max();
+    bool best_continues_previous_pair = false;
+    bool best_is_static = true;
+
     for (const auto &[current_id, current_center] : cluster_centers) {
         if (current_id == primary_target_id) continue;
-        double dist = sqrt(pow(current_center.x - primary_target_pos.x, 2) + 
-                           pow(current_center.y - primary_target_pos.y, 2));
-        if (dist < FOOT_DISTANCE_THRESHOLD) {
+
+        // primaryの急ジャンプを検出してsecond側へ救済したフレームでは、
+        // ジャンプした旧primaryをすぐsecondとして拾い直さない。
+        if (last_selection_reason_ == "previous_second_rescue" &&
+            last_rejection_reason_ == "primary_movement_threshold" &&
+            current_id == previous_target_id_) {
+            continue;
+        }
+
+        const double lateral_distance = std::fabs(current_center.y - primary_target_pos.y);
+        if (lateral_distance > this->leg_pair_max_lateral_distance_) {
+            RCLCPP_DEBUG(
+                this->get_logger(),
+                "second候補ID %d を横方向距離でreject (lateral_distance=%.3f)",
+                current_id, lateral_distance);
+            continue;
+        }
+
+        const double pair_distance = calculateDistance(current_center, primary_target_pos);
+        if (pair_distance < this->leg_pair_min_distance_ ||
+            pair_distance > this->leg_pair_max_distance_) {
+            RCLCPP_DEBUG(
+                this->get_logger(),
+                "second候補ID %d を脚間距離でreject (distance=%.3f)",
+                current_id, pair_distance);
+            continue;
+        }
+
+        geometry_msgs::msg::Point pair_center;
+        pair_center.x = (primary_target_pos.x + current_center.x) / 2.0;
+        pair_center.y = (primary_target_pos.y + current_center.y) / 2.0;
+        pair_center.z = (primary_target_pos.z + current_center.z) / 2.0;
+
+        const double center_distance = calculateDistance(pair_center, predicted_target_pos);
+        if (center_distance > this->leg_pair_center_gate_distance_) {
+            RCLCPP_DEBUG(
+                this->get_logger(),
+                "second候補ID %d を予測中心からのずれでreject (center_distance=%.3f)",
+                current_id, center_distance);
+            continue;
+        }
+
+        // 片脚がprimaryに入れ替わることがあるため、前回の二脚ペアの相方を優先する。
+        const bool continues_previous_pair =
+            current_id == previous_second_id_ ||
+            (primary_target_id == previous_second_id_ &&
+             current_id == previous_target_id_);
+
+        const bool is_static = this->getClusterMotionInfo(current_id).is_static;
+
+        const double expected_pair_distance =
+            (this->leg_pair_min_distance_ + this->leg_pair_max_distance_) / 2.0;
+        const double score =
+            center_distance + 0.1 * std::fabs(pair_distance - expected_pair_distance);
+        // second候補は、未選択、前回ペアの継続、非静止物、スコア最小の順で優先する。
+        const bool candidate_is_better =
+            second_id == -1 ||
+            (continues_previous_pair && !best_continues_previous_pair) ||
+            (continues_previous_pair == best_continues_previous_pair &&
+             best_is_static && !is_static) ||
+            (continues_previous_pair == best_continues_previous_pair &&
+             best_is_static == is_static &&
+             score < best_score);
+
+        if (candidate_is_better) {
             second_id = current_id;
             second_center = current_center;
-            return std::make_pair(second_id, second_center);
+            best_score = score;
+            best_continues_previous_pair = continues_previous_pair;
+            best_is_static = is_static;
         }
     }
+
+    if (second_id != -1) {
+        RCLCPP_DEBUG(
+            this->get_logger(),
+            "second候補ID %d を選択 (score=%.3f, previous_pair=%s, static=%s)",
+            second_id, best_score,
+            best_continues_previous_pair ? "true" : "false",
+            best_is_static ? "true" : "false");
+        return std::make_pair(second_id, second_center);
+    }
+
     return std::nullopt;  // 近くに適切なクラスタなし
 }
 

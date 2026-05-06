@@ -38,7 +38,6 @@
 #define CLUSTER_LOST_MATCHED_THRESH 0.2 // 失われたクラスタとのマッチング閾値  
 #define CLUSTER_TOLERANCE 0.05 // ?m以内の点を同じクラスタにする[m]
 #define LOST_CLUSTER_TIMEOUT 1.0 // 失われたクラスタのタイムアウト[s]
-#define FOOT_DISTANCE_THRESHOLD 0.3 //[m]
 #define FOOT_PAIR_MIN_DISTANCE 0.08 // 脚ペアとして近すぎるクラスタを除外する最小距離[m]
 #define FOOT_PAIR_MAX_DISTANCE 0.55 // 歩行中の前後脚開きを許容しつつ、遠すぎる障害物を除外する最大距離[m]
 #define FOOT_PAIR_CENTER_GATE_DISTANCE 0.35 // 脚ペア中心と予測ターゲット位置の許容距離[m]
