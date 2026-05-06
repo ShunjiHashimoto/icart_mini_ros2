@@ -115,6 +115,7 @@ def launch_setup(context, *args, **kwargs):
                 'joy_device_id': LaunchConfiguration('joy_device_id'),
                 'joy_device_name': LaunchConfiguration('joy_device_name'),
                 'joy_deadzone': LaunchConfiguration('joy_deadzone'),
+                'tracker_params_file': LaunchConfiguration('tracker_params_file'),
             }.items(),
         ),
         Node(
@@ -138,6 +139,11 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    tracker_share = get_package_share_directory('icart_mini_leg_tracker')
+    tracker_params_file = os.path.join(
+        tracker_share, 'config', 'leg_cluster_tracking_params.yaml'
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'scenario',
@@ -164,6 +170,11 @@ def generate_launch_description():
         DeclareLaunchArgument('joy_device_id', default_value='0'),
         DeclareLaunchArgument('joy_device_name', default_value=''),
         DeclareLaunchArgument('joy_deadzone', default_value='0.08'),
+        DeclareLaunchArgument(
+            'tracker_params_file',
+            default_value=tracker_params_file,
+            description='leg_cluster_tracking_node のしきい値を指定するYAMLファイル。',
+        ),
         DeclareLaunchArgument(
             'actor_pose_publish_rate',
             default_value='30.0',

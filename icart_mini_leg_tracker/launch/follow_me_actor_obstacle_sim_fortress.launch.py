@@ -10,6 +10,9 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     tracker_share = get_package_share_directory('icart_mini_leg_tracker')
     follow_launch = os.path.join(tracker_share, 'launch', 'follow_me_actor_sim_fortress.launch.py')
+    tracker_params_file = os.path.join(
+        tracker_share, 'config', 'leg_cluster_tracking_params.yaml'
+    )
 
     description_share = get_package_share_directory('icart_mini_description')
     obstacle_world = os.path.join(description_share, 'worlds', 'follow_me_obstacles_fortress.sdf')
@@ -58,6 +61,11 @@ def generate_launch_description():
         DeclareLaunchArgument('joy_device_id', default_value='0'),
         DeclareLaunchArgument('joy_device_name', default_value=''),
         DeclareLaunchArgument('joy_deadzone', default_value='0.08'),
+        DeclareLaunchArgument(
+            'tracker_params_file',
+            default_value=tracker_params_file,
+            description='leg_cluster_tracking_node のしきい値を指定するYAMLファイル。',
+        ),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(follow_launch),
@@ -87,6 +95,7 @@ def generate_launch_description():
                 'joy_device_id': LaunchConfiguration('joy_device_id'),
                 'joy_device_name': LaunchConfiguration('joy_device_name'),
                 'joy_deadzone': LaunchConfiguration('joy_deadzone'),
+                'tracker_params_file': LaunchConfiguration('tracker_params_file'),
             }.items(),
         ),
     ])

@@ -43,6 +43,7 @@ def launch_setup(context, *args, **kwargs):
     joy_device_id = LaunchConfiguration('joy_device_id')
     joy_device_name = LaunchConfiguration('joy_device_name')
     joy_deadzone = LaunchConfiguration('joy_deadzone')
+    tracker_params_file = LaunchConfiguration('tracker_params_file')
     robot_description = Command(['xacro ', robot_xacro])
 
     return [
@@ -156,7 +157,10 @@ def launch_setup(context, *args, **kwargs):
             name='leg_cluster_tracking_node',
             output='screen',
             # 追従ノード内の経過時間やmarker時刻をGazeboのsim timeに合わせる。
-            parameters=[{'use_sim_time': use_sim_time}],
+            parameters=[
+                tracker_params_file,
+                {'use_sim_time': use_sim_time},
+            ],
         ),
 
         Node(
@@ -215,8 +219,12 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    tracker_share = get_package_share_directory('icart_mini_leg_tracker')
     description_share = get_package_share_directory('icart_mini_description')
     world_file = os.path.join(description_share, 'worlds', 'follow_me_empty_fortress.sdf')
+    tracker_params_file = os.path.join(
+        tracker_share, 'config', 'leg_cluster_tracking_params.yaml'
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument('world', default_value=world_file),
@@ -238,5 +246,10 @@ def generate_launch_description():
         DeclareLaunchArgument('joy_device_id', default_value='0'),
         DeclareLaunchArgument('joy_device_name', default_value=''),
         DeclareLaunchArgument('joy_deadzone', default_value='0.08'),
+        DeclareLaunchArgument(
+            'tracker_params_file',
+            default_value=tracker_params_file,
+            description='leg_cluster_tracking_node のしきい値を指定するYAMLファイル。',
+        ),
         OpaqueFunction(function=launch_setup),
     ])

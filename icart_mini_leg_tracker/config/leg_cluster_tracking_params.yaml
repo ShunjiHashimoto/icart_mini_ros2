@@ -1,0 +1,46 @@
+leg_cluster_tracking_node:
+  ros__parameters:
+    # 追従対象を一時的に見失ってから、完全なLostへ遷移するまでの猶予時間[s]。
+    target_reacquire_timeout: 1.0
+
+    # 前回位置または予測位置からこの距離以内のクラスタだけを再捕捉候補として扱う[m]。
+    predicted_gate_distance: 0.5
+
+    # 再捕捉候補が前回ターゲット方向から大きく角度ジャンプした場合に除外するしきい値[rad]。
+    max_target_angle_jump: 1.57079632679
+
+    # 再捕捉候補が前回ターゲット位置から大きく距離ジャンプした場合に除外するしきい値[m]。
+    max_target_distance_jump: 0.4
+
+    # 再捕捉時に、前回ターゲット方向から許容する最大角度差[rad]。
+    reacquire_max_angle_diff: 1.57079632679
+
+    # ID入れ替わり時の速度スパイクを許容しつつ、明らかな異常速度だけ除外する上限[m/s]。
+    reacquire_max_speed: 5.0
+
+    # primary/secondを左右脚ペアとみなすための最小脚間距離[m]。
+    leg_pair_min_distance: 0.08
+
+    # 歩行中の前後脚開きを許容しつつ、遠すぎる障害物をsecond候補から外す最大脚間距離[m]。
+    leg_pair_max_distance: 0.55
+
+    # 脚ペア中心が予測ターゲット位置から離れすぎている場合にsecond候補から外す距離[m]。
+    leg_pair_center_gate_distance: 0.35
+
+    # 柱状障害物をsecond脚候補に混ぜないため、primary脚から横方向に許容する最大距離[m]。
+    leg_pair_max_lateral_distance: 0.08
+
+    # 初期追従対象として採用する正面方向の最大距離[m]。
+    initial_target_max_x: 1.0
+
+    # 初期追従対象として採用する左右方向の最大距離[m]。
+    initial_target_max_abs_y: 0.5
+
+    # この速度未満のクラスタを静止候補としてカウントするしきい値[m/s]。
+    static_speed_threshold: 0.1
+
+    # 静止クラスタと判定するために、低速状態が連続して必要なフレーム数。
+    static_frame_limit: 30
+
+    # 追従対象または近距離障害物に近づきすぎたときに停止する距離[m]。
+    safety_stop_distance: 0.35
