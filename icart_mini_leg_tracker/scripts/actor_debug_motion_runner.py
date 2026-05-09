@@ -91,7 +91,7 @@ class ActorDebugMotionRunner(Node):
             # ロボット前方を軽く横切るよう、近めの初期位置から左旋回しながら通過する。
             return [
                 MotionSegment(self.duration, self.linear_speed, 0.0, self.turn_angular_speed),
-                MotionSegment(2.0, self.linear_speed, 0.0, 0.0),
+                MotionSegment(6.0, self.linear_speed, 0.0, 0.0),
             ]
         if self.motion_scenario == 'turning_forward_walk':
             # 前進しながら左右へ向きを変え、脚の見え方が変わる状態を継続的に作る。
@@ -100,6 +100,14 @@ class ActorDebugMotionRunner(Node):
                 MotionSegment(4.0, self.linear_speed, 0.0, -self.turn_angular_speed),
                 MotionSegment(4.0, self.linear_speed, 0.0, self.turn_angular_speed),
                 MotionSegment(4.0, self.linear_speed, 0.0, 0.0),
+            ]
+        if self.motion_scenario == 'gentle_slalom':
+            # 障害物の多い環境で左右の見え方を変えるため、通常速度のまま緩いS字軌道にする。
+            return [
+                MotionSegment(3.0, self.linear_speed, 0.0, self.turn_angular_speed),
+                MotionSegment(4.0, self.linear_speed, 0.0, -self.turn_angular_speed),
+                MotionSegment(4.0, self.linear_speed, 0.0, self.turn_angular_speed),
+                MotionSegment(3.0, self.linear_speed, 0.0, 0.0),
             ]
         self.get_logger().warn(
             f'Unknown motion_scenario [{self.motion_scenario}], falling back to straight.'
