@@ -1,0 +1,262 @@
+# シミュレーション Follow me
+
+このドキュメントでは、Gazebo Fortress + RViz 上で i-Cart mini の Follow me を確認する手順をまとめます。初回セットアップと Docker build は [README](../README.md) を参照してください。
+
+## 起動
+
+シミュレーションは Docker コンテナ内で実行します。Gazebo、RViz、icart モデル、LiDAR、倒立振子風の左右足円柱ターゲット、追従ノードをまとめて起動できます。
+
+```bash
+docker exec -it icart_mini_ros2 bash
+cd /root/icart_ws
+source install/setup.bash
+```
+
+通常の確認は Fortress 版 launch を使います。
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_biped_sim_fortress.launch.py
+```
+
+起動直後:
+
+- 左スティックで `icart_mini` を手動操作
+- 速度指令は `/cmd_vel`
+
+Start ボタン後:
+
+- Follow me 開始
+- 同じ左スティックで2本脚モデルを操作
+- 2本脚モデル操作の速度指令は `/person/cmd_vel`
+- ロボットは LiDAR の `/scan` から脚クラスタを追従
+
+Back ボタン後:
+
+- Follow me 停止
+- 操作対象が `icart_mini` に戻る
+
+障害物 world で確認する場合:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py
+```
+
+実人物 Actor / 2足プロキシを切り替えて確認する場合:
+
+```bash
+ros2 launch icart_mini_leg_tracker follow_me_actor_sim_fortress.launch.py
+ros2 launch icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py
+```
+
+この launch はジョイスティック操作がデフォルトです。起動直後は `icart_mini` を操作し、Start ボタン後は左右足円柱のターゲットを操作します。スティック入力がゼロのときは足の踏み出しも停止します。launch 起動時点では Follow me もターゲット移動も開始しません。Start ボタンで Follow me とターゲット操作を開始します。
+
+## 代表的な launch 引数
+
+| launch | 主な用途 |
+| --- | --- |
+| `icart_mini_leg_tracker follow_me_biped_sim_fortress.launch.py` | Fortress の空 world で、左右足を交互に踏み出す倒立振子風ターゲットを使った Follow me |
+| `icart_mini_leg_tracker follow_me_obstacle_sim_fortress.launch.py` | Fortress の障害物 world での倒立振子風ターゲット Follow me |
+| `icart_mini_leg_tracker follow_me_actor_sim_fortress.launch.py` | Fortress の空 world で、DoctorFemaleWalk Actor または左右脚プロキシを切り替える Follow me |
+| `icart_mini_leg_tracker follow_me_actor_obstacle_sim_fortress.launch.py` | Fortress の障害物 world で、DoctorFemaleWalk Actor または左右脚プロキシを切り替える Follow me |
+| `icart_mini_description icart_mini_display.launch.py` | RViz 上で icart モデルだけを確認 |
+
+| 引数 | 例 | 説明 |
+| --- | --- | --- |
+| `gui` | `gui:=false` | Gazebo GUI の有無 |
+| `use_rviz` | `use_rviz:=false` | RViz の有無 |
+| `use_joy` | `use_joy:=true` | ジョイスティック操作の有無。デフォルトは `true` |
+| `joy_device_id` | `joy_device_id:=0` | `joy_enumerate_devices` の ID |
+| `initial_x` | `initial_x:=0.9` | Actor 版のターゲット初期 x 位置。ロボットとの初期干渉を避けるため、従来の円柱のみの launch より前方に置く |
+| `initial_y` | `initial_y:=0.0` | ターゲット初期 y 位置 |
+| `scan_target_mode` | `scan_target_mode:=actor_proxy` | Actor 版 launch の LiDAR 検出対象。`actor_proxy` は Actor と同期脚プロキシ、`leg_proxy` は左右脚プロキシのみ |
+| `actor_pose_publish_rate` | `actor_pose_publish_rate:=30.0` | Actor pose の publish 周期 |
+| `update_rate` | `update_rate:=60.0` | 倒立振子風ターゲットの Gazebo 更新周期 |
+| `step_length` | `step_length:=0.24` | 倒立振子風ターゲットの左右足の前後ステップ幅 |
+| `step_frequency` | `step_frequency:=1.2` | 倒立振子風ターゲットのステップ周期 |
+
+## 表示・トピック確認
+
+Fortress 版 launch は RViz 設定 `follow_me_sim.rviz` を使い、Fixed Frame を `odom`、LaserScan を `/scan`、脚クラスタと人物マーカーを `/leg_tracker/*` の MarkerArray として表示します。
+
+別ターミナルからコンテナへ入り、代表的な入出力を確認します。
+
+```bash
+docker exec -it icart_mini_ros2 bash
+cd /root/icart_ws
+source install/setup.bash
+
+ros2 topic echo /clock --once
+ros2 topic echo /scan --once
+ros2 topic echo /odom --once
+ros2 topic echo /joint_states --once
+ros2 topic echo /tf --once
+ros2 topic echo /tf_static --once
+ros2 topic echo /leg_tracker/cluster_markers --once
+ros2 topic echo /leg_tracker/person_marker --once
+```
+
+`ros2 topic echo /tf --once` で `odom -> base_footprint` が見え、RViz の Fixed Frame `odom` にエラーが出ないことを確認します。Start ボタン後は脚ターゲットが動き、`/leg_tracker/cluster_markers` と `/leg_tracker/person_marker` が更新されることを確認します。
+
+## シミュレーションのモデル
+
+Gazebo シミュレーションでは、LiDAR に安定して見える円柱脚モデルを追従対象にします。Fortress 版の `follow_me_biped_sim_fortress.launch.py` では左右の脚を別エンティティとして spawn し、`/world/<world_name>/set_pose` service 経由で位置を更新します。倒立振子モデルの簡易表現として左右足が交互に前後するようにし、Gazebo 上には倒立振子リンクは表示せず、LiDAR に見える円柱だけを動かします。
+
+Actor 版の `follow_me_actor_sim_fortress.launch.py` と `follow_me_actor_obstacle_sim_fortress.launch.py` は、`gazebo_ros_actor_plugin` の `DoctorFemaleWalk/model.sdf.xacro` を `xacro` で展開し、Gazebo entity 名 `person_actor` として `ros_gz_sim create -string` で spawn します。Actor は velocity mode で使い、ROS 側 `/person/cmd_vel` を Gazebo 側 `/person_actor/cmd_vel` へ bridge します。Gazebo 側 `/person_actor/pose` は ROS 側 `/person/actor_pose` へ bridge します。
+
+Actor 版の `scan_target_mode` は `actor_proxy` がデフォルトです。`actor_proxy` では DoctorFemaleWalk Actor と左右脚プロキシを同時に spawn し、Actor plugin 内で DAE 由来の足 pose に脚プロキシを同期します。`leg_proxy` では既存同等の左右脚プロキシと方向マーカーだけを spawn し、`inverted_pendulum_biped_controller.py` が `/person/cmd_vel` と `/person/control` で脚プロキシを更新します。
+
+## Fortress の LiDAR visibility 設定
+
+Fortress の `gpu_lidar` は collision ではなく rendering geometry、つまり SDF の `visual` を見て `/scan` を生成します。そのため、Actor mesh の visual がそのまま LiDAR に入ると、脚プロキシと Actor 本体の scan が重複します。
+
+この重複を避けるため、`icart_mini_fortress.xacro` の LiDAR sensor に `visibility_mask=536870912` を設定し、脚プロキシと障害物の visual だけに同じ bit を含む `visibility_flags=536870913` を設定しています。`536870913` は `536870912 + 1` で、`536870912` が LiDAR 用 bit、`1` が Gazebo GUI の通常表示 bit です。
+
+`leg_hidden.sdf` は Gazebo GUI 上では透明に見せたい一方で、collision と LiDAR 検出は残したい脚プロキシです。visual を削除すると `gpu_lidar` からも消えるため、`transparency=1.0` で透明化しつつ `visibility_flags=536870913` を残しています。RViz はこの値を直接読まず、Gazebo が生成した `/scan` を表示するだけです。
+
+## ノード / トピック概要
+
+| ノード | 役割 | 購読 | 発行 |
+| --- | --- | --- | --- |
+| `leg_cluster_tracking_node` | LiDAR 点群から脚クラスタを検出し追従制御を生成 | `/scan`, `/joy`, `/follow_me/control` | `/cmd_vel`, `/leg_tracker/cluster_markers`, `/leg_tracker/cluster_centers`, `/leg_tracker/cluster_infos`, `/leg_tracker/person_marker`, `/leg_tracker/is_lost_target` |
+| `joystick_follow_me_teleop.py` | シミュレーション用に F710 の操作対象をロボットと人物モデルで切替 | `/joy` | `/cmd_vel`, `/person/cmd_vel`, `/person/control` |
+| `inverted_pendulum_biped_controller.py` | 左右足を交互に踏み出す倒立振子風ターゲットを移動 | `/person/cmd_vel`, `/person/control`, `/world/<world_name>/set_pose` | `/person/motion_event` |
+| `actor_parameter_bridge` | Actor 操作用の ROS/Gazebo topic bridge | `/person/cmd_vel`, `/person_actor/pose` | `/person_actor/cmd_vel`, `/person/actor_pose` |
+| `icart_mini_ypspur_bridge` | 実機用 YP-Spur ブリッジ | `/cmd_vel` | `/odom`, `/joint_states`, TF |
+| `urg_node2` | 実機 LiDAR ドライバ | - | `/scan` |
+
+## icart_mini_leg_tracker の処理概要
+
+### Preprocessing
+
+- LiDAR の生データを座標変換し、極端に近い点群を除去
+- 点群を間引いて計算量を削減
+- 遠すぎる点をクラスタ対象から除外
+
+### Clustering
+
+- PCL の `KdTree` と `EuclideanClusterExtraction` を使用
+- クラスタサイズと距離で脚候補を選別
+- 各クラスタの重心を算出
+
+### Tracking
+
+- 過去フレームの重心と ID 履歴からクラスタ ID を安定化
+- 一時的に見失ったクラスタを速度ベクトルから補間
+- 速度履歴を平滑化し、静止判定を行う
+
+### Following
+
+- 有効領域内でターゲット候補を抽出
+- 既存ターゲットの継続可否を距離と移動量から判定
+- PID 制御で前進・旋回速度を生成
+- 追従対象ロスト時は `/leg_tracker/is_lost_target` を通知
+
+<img src=../.docs/imgs/clustering.png width=50%>
+
+## Rosbag / デバッグ
+
+シミュレーション中に別ターミナルでコンテナへ入り、代表的なトピックを記録します。
+
+```bash
+docker exec -it icart_mini_ros2 bash
+cd /root/icart_ws
+source install/setup.bash
+ros2 run icart_mini_leg_tracker record_follow_me_bag.sh
+```
+
+出力先を指定する場合:
+
+```bash
+ros2 run icart_mini_leg_tracker record_follow_me_bag.sh /root/icart_ws/src/icart_mini_ros2/icart_mini_leg_tracker/rosbag/test_run
+```
+
+記録対象:
+
+- `/scan`
+- `/tf`, `/tf_static`
+- `/odom`
+- `/cmd_vel`
+- `/joy`
+- `/person/cmd_vel`, `/person/control`, `/person/motion_event`
+- `/leg_tracker/cluster_markers`
+- `/leg_tracker/cluster_centers`
+- `/leg_tracker/cluster_infos`
+- `/leg_tracker/person_marker`
+- `/leg_tracker/is_lost_target`
+
+LiDAR と joystick 入力を再生して追跡ノードを再デバッグする例:
+
+```bash
+ros2 run icart_mini_leg_tracker leg_cluster_tracking_node
+ros2 bag play /path/to/bag --clock --rate 0.5 \
+  --topics /scan /tf /tf_static /joy /person/cmd_vel /person/control /person/motion_event
+```
+
+再生結果の速度指令や追跡状態を別ターミナルで確認します。
+
+```bash
+ros2 topic echo /cmd_vel
+ros2 topic echo /leg_tracker/is_lost_target
+ros2 topic echo /leg_tracker/cluster_infos
+```
+
+ClusterInfo を CSV として保存する例:
+
+```bash
+ros2 topic echo /leg_tracker/cluster_infos --csv > cluster_infos.csv
+```
+
+ログファイルをリセットしたい場合は、`icart_mini_leg_tracker/csv/cluster_tracking_log.csv` を削除してください。ノード起動時に必要なログファイルは再生成されます。
+
+## トラブルシュート
+
+### Gazebo GUI や RViz が表示されない
+
+ホスト側で X11 の許可を確認してください。
+
+```bash
+xhost +local:docker
+```
+
+### `joy_enumerate_devices` に F710 が出ない
+
+- F710 の USB ドングルをホストに挿し直す
+- ホストで `ls /dev/input/js*` を確認する
+- コンテナを作り直す
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2/docker
+docker rm -f icart_mini_ros2
+./run.sh
+```
+
+### X モードでジョイスティック操作できない
+
+`/dev/input/js1` と `joy_device_id:=1` は同じ意味ではありません。コンテナ内で `joy_enumerate_devices` を実行し、表示された `ID` を `joy_device_id` に指定してください。
+
+### D モードで RT が追従開始になる
+
+F710 の `D` モードではボタン番号が README の割り当てと変わります。背面スイッチを `X` にして、`joy_node` または launch を再起動してください。
+
+### Gazebo が起動しない
+
+前回の Gazebo が残っている場合があります。
+
+```bash
+pkill -f "gz sim"
+pkill -f "ign gazebo"
+```
+
+`bind: Address already in use` が続く場合は、Gazebo master のプロセスが残っていないか確認してください。
+
+```bash
+ps aux | grep -E "gz sim|ign gazebo|ros2 launch" | grep -v grep
+```
+
+### CycloneDDS が `wlan0: does not match an available interface` を出す
+
+Docker 内で指定したネットワークインターフェース名が存在しない場合に出ます。コンテナ内のインターフェース名を確認し、`cyclonedds.xml` の設定を合わせてください。
+
+```bash
+ip addr
+```
