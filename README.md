@@ -51,6 +51,12 @@ sudo apt install -y git ssh python3-vcstool build-essential cmake
 sudo ssh-keygen -A
 ```
 
+Debian 13 など `python3-vcstool` が見つからない環境では、パッケージ名が `vcstool` です。
+
+```bash
+sudo apt install -y git ssh vcstool build-essential cmake
+```
+
 `build-essential` は YP-Spur のビルドに必要です。`cmake ../src/yp-spur` で `No CMAKE_CXX_COMPILER could be found` が出る場合は、C++ コンパイラが入っていません。
 
 ### Docker
@@ -77,13 +83,13 @@ git clone git@github.com:ShunjiHashimoto/icart_mini_ros2.git src/icart_mini_ros2
 vcs import src < src/icart_mini_ros2/ros2.repos
 ```
 
-`ros2.repos` には `icart_mini_ros2`, `gazebo-ros-actor-plugin`, `i-Cart`, `yp-spur`, `urg-node` の取得元をまとめています。
-
-`urg-node/urg_library` が空の場合は、urg_node2 の submodule を初期化してください。
+`vcs import` はホスト側で実行してください。Docker コンテナ内の root ユーザでホスト共有 workspace に対して実行すると、ホスト側で取得したリポジトリの所有者が `root` や `nobody` になり、後続の `git` 操作で `.git/config` を更新できない場合があります。その場合はホスト側で所有者を戻します。
 
 ```bash
-git -C src/urg-node submodule update --init --recursive
+sudo chown -R "$USER:$USER" ~/icart_ws
 ```
+
+`ros2.repos` には実機で使う `icart_mini_ros2`, `i-Cart`, `yp-spur`, `urg-node`, `urg-node/urg_library` の取得元をまとめています。シミュレーションで Actor 版 launch を使う場合は、追加で `ros2_sim.repos` を import します。
 
 Docker コンテナ内の root ユーザでホスト共有 workspace を扱うと、`vcs import` や `git` が `detected dubious ownership` を出す場合があります。その場合だけ safe directory に追加します。
 
@@ -101,14 +107,7 @@ docker build --network=host -t icart_mini_ros2:latest .
 
 Docker build 後に `LegacyKeyValueFormat` の warning が出る場合があります。これは Dockerfile の古い `ENV` 記法に対する警告で、ビルドが成功していれば無視できます。
 
-コンテナに入ったら、必要なパッケージをビルドします。
-
-```bash
-cd /root/icart_ws
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select gazebo_ros_actor_plugin icart_mini_description icart_mini_leg_tracker
-source install/setup.bash
-```
+コンテナに入ったら、実機 bringup に必要な YP-Spur と ROS 2 パッケージをビルドします。手順は [実機 Bringup](#実機-bringup) を参照してください。
 
 ## 実機 Bringup
 
@@ -149,10 +148,18 @@ sudo usermod -aG dialout $USER
 ### ROS 2 パッケージのビルド
 
 ```bash
-cd ~/icart_ws
-colcon build --symlink-install
+cd /root/icart_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select \
+  urg_node2 \
+  icart_mini_bringup \
+  icart_mini_ypspur_bridge \
+  icart_mini_leg_tracker \
+  icart_mini_description
 source install/setup.bash
 ```
+
+`i-Cart` はパラメータファイルを参照するだけなので build 対象ではありません。`joy` と `teleop_twist_joy` は Docker イメージ内の apt パッケージを使います。
 
 ### 実機起動
 
