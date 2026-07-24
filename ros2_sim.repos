@@ -1,0 +1,5 @@
+repositories:
+  gazebo-ros-actor-plugin:
+    type: git
+    url: https://github.com/ShunjiHashimoto/gazebo-ros-actor-plugin.git
+    version: dev/fortress-actor-foot-proxy

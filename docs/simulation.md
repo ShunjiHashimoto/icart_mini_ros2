@@ -6,6 +6,21 @@ Gazebo Fortress上の人物Actorを使い、i-Cart miniの人物追従を同じ�
 
 Dockerコンテナへ入り、ワークスペースを読み込みます。
 
+Actor 版 launch を使う場合だけ、ホスト側で `gazebo_ros_actor_plugin` を追加取得してからコンテナ内でビルドします。
+
+```bash
+cd ~/icart_ws
+vcs import src < src/icart_mini_ros2/ros2_sim.repos
+```
+
+```bash
+docker exec -it icart_mini_ros2 bash
+cd /root/icart_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select gazebo_ros_actor_plugin icart_mini_description icart_mini_leg_tracker
+source install/setup.bash
+```
+
 ```bash
 docker exec -it icart_mini_ros2 bash
 cd /root/icart_ws
