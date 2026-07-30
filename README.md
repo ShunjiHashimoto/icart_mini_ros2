@@ -105,6 +105,16 @@ docker build --network=host -t icart_mini_ros2:latest .
 ./run.sh
 ```
 
+DockerfileはAMD64/ARM64共通です。Gazebo依存はAMD64で自動インストールされ、
+ROS 2 Humble向けGazeboバイナリが提供されないARM64では省略されます。Gazeboを
+明示的に除外して実機bringup/RViz用イメージを作る場合は次のように指定します。
+
+```bash
+docker build --network=host \
+  --build-arg INSTALL_SIMULATION=false \
+  -t icart_mini_ros2:latest .
+```
+
 Docker build 後に `LegacyKeyValueFormat` の warning が出る場合があります。これは Dockerfile の古い `ENV` 記法に対する警告で、ビルドが成功していれば無視できます。
 
 コンテナに入ったら、実機 bringup に必要な YP-Spur と ROS 2 パッケージをビルドします。手順は [実機 Bringup](#実機-bringup) を参照してください。
