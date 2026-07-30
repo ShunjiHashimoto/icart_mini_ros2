@@ -4,11 +4,39 @@ set -eo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ "$#" -ne 2 ]; then
+  echo "Usage: $0 <network-interface> <remote-pc-ip>"
+  echo "Example: $0 wlan0 192.168.0.110"
+  exit 2
+fi
+
+DDS_INTERFACE="$1"
+DDS_PEER="$2"
+
 ROS_SETUP="/opt/ros/humble/setup.bash"
 WS_SETUP="$HOME/icart_ws/install/setup.bash"
 
-[ -f "$ROS_SETUP" ] && source "$ROS_SETUP"
-[ -f "$WS_SETUP" ] && source "$WS_SETUP"
+if [ ! -f "$ROS_SETUP" ]; then
+  echo "ROS 2 Humble setup was not found: ${ROS_SETUP}"
+  exit 1
+fi
+if [ ! -f "$WS_SETUP" ]; then
+  echo "Workspace setup was not found: ${WS_SETUP}"
+  exit 1
+fi
+
+source "$ROS_SETUP"
+source "$WS_SETUP"
+
+if ! ros2 pkg prefix rmw_cyclonedds_cpp >/dev/null 2>&1; then
+  echo "rmw_cyclonedds_cpp is not installed."
+  exit 1
+fi
+
+source "${SCRIPT_DIR}/dds_config.sh"
+icart_configure_dds "$DDS_INTERFACE" "$DDS_PEER"
 
 LOG_DIR="$HOME/icart_ws/log/auto_start"
 mkdir -p "$LOG_DIR"

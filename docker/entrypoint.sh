@@ -6,7 +6,7 @@ source /opt/ros/humble/setup.bash
 if [ -f ~/icart_ws/install/setup.bash ]; then
     source ~/icart_ws/install/setup.bash
 fi
-export ROS_DOMAIN_ID=99
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-99}"
 
 # Install YP-Spur inside this container when the mounted workspace provides it.
 if [ ! -f "/usr/local/include/ypspur.h" ] && [ -f "/root/icart_ws/src/yp-spur/CMakeLists.txt" ]; then

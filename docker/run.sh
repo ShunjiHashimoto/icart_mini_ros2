@@ -24,6 +24,7 @@ docker run --rm \
     --volume="/dev/bus/usb:/dev/bus/usb" \
     --name=$CONTAINER_NAME \
     -e TZ=Asia/Tokyo \
+    --env ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-99}" \
     --privileged \
     --net=host \
     $DOCKER_IMAGE \

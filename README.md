@@ -223,6 +223,58 @@ ros2 topic echo /joy
 - [.docs/wiki/Year-In-Review.md](.docs/wiki/Year-In-Review.md)
 - [.docs/wiki/Roadmap.md](.docs/wiki/Roadmap.md)
 
+## 別PCからRViz2で表示
+
+Wi-Fi上でDDS multicast discoveryが安定しない環境向けに、ロボット側と表示側の
+双方で通信インターフェースと相手PCのIPv4アドレスを明示します。使用する
+インターフェース名とIPv4アドレスは各PCで確認できます。
+
+```bash
+ip -br address
+```
+
+次の例では、ロボット側が `192.168.0.111`（`wlan0`）、表示側PCが
+`192.168.0.110`（`wlp3s0`）です。まずロボット側で、表示側PCをDDS peerに
+指定してbringupを起動します。
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2
+./sh/start_icart.sh wlan0 192.168.0.110
+```
+
+表示側PCではROS 2 Humble入りDockerからRViz2を起動し、ロボット側をDDS peerに
+指定します。
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2/docker
+./run.sh /root/icart_ws/src/icart_mini_ros2/sh/start_remote_rviz.sh \
+  wlp3s0 192.168.0.111
+```
+
+表示側PCへROS 2 Humbleを直接インストールしている場合は、Dockerを使わず実行
+できます。
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2
+./sh/start_remote_rviz.sh wlp3s0 192.168.0.111
+```
+
+両側の `ROS_DOMAIN_ID` は一致させる必要があり、デフォルトは `99` です。別の
+domainを使用する場合は、両側の起動コマンドで同じ値を指定します。ロボット側：
+
+```bash
+ROS_DOMAIN_ID=10 ./sh/start_icart.sh wlan0 192.168.0.110
+```
+
+表示側：
+
+```bash
+cd ~/icart_ws/src/icart_mini_ros2/docker
+ROS_DOMAIN_ID=10 ./run.sh \
+  /root/icart_ws/src/icart_mini_ros2/sh/start_remote_rviz.sh \
+  wlp3s0 192.168.0.111
+```
+
 ## 依存パッケージ
 
 - [YP-Spur](https://github.com/openspur/yp-spur): 実機で使用
