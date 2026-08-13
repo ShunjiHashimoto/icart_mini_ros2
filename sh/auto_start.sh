@@ -38,6 +38,13 @@ fi
 source "${SCRIPT_DIR}/dds_config.sh"
 icart_configure_dds "$DDS_INTERFACE" "$DDS_PEER"
 
+PERSON_MARKER_INVERTED="${PERSON_MARKER_INVERTED:-false}"
+if [ "${PERSON_MARKER_INVERTED}" != "true" ] && \
+   [ "${PERSON_MARKER_INVERTED}" != "false" ]; then
+  echo "PERSON_MARKER_INVERTED must be true or false." >&2
+  exit 2
+fi
+
 LOG_DIR="$HOME/icart_ws/log/auto_start"
 mkdir -p "$LOG_DIR"
 
@@ -47,7 +54,8 @@ nohup ros2 launch icart_mini_bringup icart_mini_bringup.launch.py \
 nohup ros2 run icart_mini_leg_tracker led_status.py \
   >"$LOG_DIR/led_status.log" 2>&1 &
 
-nohup ros2 run icart_mini_leg_tracker leg_cluster_tracking_node \
+nohup ros2 run icart_mini_leg_tracker leg_cluster_tracking_node --ros-args \
+  -p person_marker_inverted:="${PERSON_MARKER_INVERTED}" \
   >"$LOG_DIR/leg_tracker.log" 2>&1 &
 
 wait

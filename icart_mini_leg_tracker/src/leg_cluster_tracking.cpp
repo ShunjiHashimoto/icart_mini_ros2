@@ -89,6 +89,8 @@ void LegClusterTracking::loadTrackingParameters() {
         this->declare_parameter<int>("static_frame_limit", STATIC_FRAME_LIMIT);
     this->safety_stop_distance_ =
         this->declare_parameter<double>("safety_stop_distance", STOP_DISTANCE_THRESHOLD);
+    this->person_marker_inverted_ =
+        this->declare_parameter<bool>("person_marker_inverted", false);
 
     RCLCPP_INFO(
         this->get_logger(),
@@ -1403,29 +1405,18 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     std::string frame_id = "laser";
     std::string ns = "person_marker";
     int marker_id = 999;
+    const double marker_z_direction = person_marker_inverted_ ? -1.0 : 1.0;
 
-    // BLDC
-    // visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
-    //     ns, marker_id++, visualization_msgs::msg::Marker::CYLINDER,
-    //     target_pos, 0.1, 0.1, -0.3, -1, 0.0, 1.0, 0.0, 0.5);
-    // body_marker.pose.position.z -= 0.15;
-    // icart
     visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::CYLINDER,
         target_pos, 0.1, 0.1, 0.3, -1, 0.0, 1.0, 0.0, 0.5);
-    body_marker.pose.position.z += 0.15;
+    body_marker.pose.position.z += marker_z_direction * 0.15;
     markers.markers.push_back(body_marker);
 
-    // BLDC
-    // visualization_msgs::msg::Marker head_marker = marker_helper_->createMarker(
-    //     ns, marker_id++, visualization_msgs::msg::Marker::SPHERE,
-    //     target_pos, 0.1, 0.1, -0.1, -1, 0.0, 1.0, 0.0, 0.5);
-    // head_marker.pose.position.z -= 0.35;
-    // icart
     visualization_msgs::msg::Marker head_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::SPHERE,
         target_pos, 0.1, 0.1, 0.1, -1, 0.0, 1.0, 0.0, 0.5);
-    head_marker.pose.position.z += 0.35;
+    head_marker.pose.position.z += marker_z_direction * 0.35;
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);

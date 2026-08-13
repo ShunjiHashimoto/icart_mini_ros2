@@ -44,3 +44,6 @@ leg_cluster_tracking_node:
 
     # 追従対象または近距離障害物に近づきすぎたときに停止する距離[m]。
     safety_stop_distance: 0.5
+
+    # LiDARを上下反転して搭載する場合、人物Markerをlaser座標の-Z方向へ表示する。
+    person_marker_inverted: false
