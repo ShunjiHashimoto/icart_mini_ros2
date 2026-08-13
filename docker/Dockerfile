@@ -1,4 +1,5 @@
-FROM ros:humble-perception-jammy
+#FROM ros:humble-perception-jammy
+FROM arm64v8/ros:humble-perception
 
 # キーボード設定の選択を省略
 ARG DEBIAN_FRONTEND=noninteractive
@@ -13,6 +14,7 @@ RUN apt-get update && apt-get install -y \
   git \
   wget \
   tmux \
+  vim \
   x11-apps \
   terminator \
   libfreetype6-dev \
@@ -96,4 +98,4 @@ RUN mkdir -p /root/icart_ws/src
 WORKDIR /root/icart_ws/src
 
 RUN echo 'source /root/icart_ws/src/icart_mini_ros2/docker/before_bringup.sh' >> ~/.bashrc
-RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker"' >> ~/.bashrc
+RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker cugo_rs485_motor_control tang_control tang_bringup"' >> ~/.bashrc
