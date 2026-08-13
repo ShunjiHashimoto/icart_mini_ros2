@@ -13,11 +13,14 @@ LegClusterTracking::LegClusterTracking() :
     start_followme_flag(false),
     is_target_initialized_(false), 
     stop_by_joystick_(false),
+    person_marker_inverted_(false),
     marker_helper_(std::make_shared<MarkerHelper>(1000)), 
     csv_logger_(std::make_shared<CSVLogger>(FILENAME)),
     accumulated_loop_period_(0.0),
     loop_sample_count_(0)
     {
+    person_marker_inverted_ =
+        this->declare_parameter<bool>("person_marker_inverted", false);
 
     lidar_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
         "/scan", rclcpp::QoS(10).best_effort(), 
@@ -964,6 +967,7 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     std::string frame_id = "laser";
     std::string ns = "person_marker";
     int marker_id = 999;
+    const double marker_z_direction = person_marker_inverted_ ? -1.0 : 1.0;
 
     // BLDC
     // visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
@@ -974,7 +978,7 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     visualization_msgs::msg::Marker body_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::CYLINDER,
         target_pos, 0.1, 0.1, 0.3, -1, 0.0, 1.0, 0.0, 0.5);
-    body_marker.pose.position.z += 0.15;
+    body_marker.pose.position.z += marker_z_direction * 0.15;
     markers.markers.push_back(body_marker);
 
     // BLDC
@@ -986,7 +990,7 @@ void LegClusterTracking::publishPersonMarker(const geometry_msgs::msg::Point &ta
     visualization_msgs::msg::Marker head_marker = marker_helper_->createMarker(
         ns, marker_id++, visualization_msgs::msg::Marker::SPHERE,
         target_pos, 0.1, 0.1, 0.1, -1, 0.0, 1.0, 0.0, 0.5);
-    head_marker.pose.position.z += 0.35;
+    head_marker.pose.position.z += marker_z_direction * 0.35;
     markers.markers.push_back(head_marker);
 
     person_marker_publisher_->publish(markers);

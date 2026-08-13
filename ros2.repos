@@ -3,10 +3,6 @@ repositories:
     type: git
     url: git@github.com:ShunjiHashimoto/icart_mini_ros2.git
     version: main
-  gazebo-ros-actor-plugin:
-    type: git
-    url: https://github.com/ShunjiHashimoto/gazebo-ros-actor-plugin.git
-    version: dev/fortress-actor-foot-proxy
   i-Cart:
     type: git
     url: https://github.com/BND-tc/i-Cart.git
@@ -19,3 +15,7 @@ repositories:
     type: git
     url: https://github.com/ShunjiHashimoto/urg_node2.git
     version: main
+  urg-node/urg_library:
+    type: git
+    url: https://github.com/UrgNetwork/urg_library.git
+    version: e41455c7858d24a39332a79412ecb6cfc716839b

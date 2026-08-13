@@ -165,6 +165,7 @@ private:
     int previous_second_id_;
     bool is_target_initialized_;
     bool stop_by_joystick_;
+    bool person_marker_inverted_;
     int current_target_id_;  // 追従対象のクラスタID
     int current_second_id_;  // 追従対象のクラスタID
 

@@ -1,8 +1,9 @@
-#FROM arm64v8/ros:humble-perception
-FROM osrf/ros:humble-desktop-full
+FROM arm64v8/ros:humble-perception
 
 # キーボード設定の選択を省略
 ARG DEBIAN_FRONTEND=noninteractive
+ARG TARGETARCH
+ARG INSTALL_SIMULATION=auto
 
 # Install apt packages
 RUN apt-get update && apt-get install -y \
@@ -17,6 +18,7 @@ RUN apt-get update && apt-get install -y \
   libfreetype6-dev \
   libpng-dev \
   iputils-ping \
+  iproute2 \
   net-tools \
   libmodbus-dev \
   tree \
@@ -33,9 +35,6 @@ RUN apt-get update && apt-get install -y \
   ros-humble-urg-node \
   ros-humble-sensor-msgs \
   ros-humble-xacro \
-  ros-humble-ros-gz \
-  ros-humble-ros-gz-sim \
-  ros-humble-ros-gz-bridge \
   ros-humble-rviz2 \
   ros-humble-rmw-cyclonedds-cpp \
   ros-humble-geometry-msgs \
@@ -50,7 +49,25 @@ RUN apt-get update && apt-get install -y \
   ros-humble-rclcpp && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV RMW_IMPLEMENTATION rmw_cyclonedds_cpp
+# Gazebo Fortress packages are unavailable for ROS 2 Humble on ARM64.
+# Keep simulation dependencies opt-in while building the robot image.
+RUN case "${INSTALL_SIMULATION}:${TARGETARCH}" in \
+      true:*|auto:amd64) \
+        apt-get update && apt-get install -y \
+          ros-humble-ros-gz \
+          ros-humble-ros-gz-sim \
+          ros-humble-ros-gz-bridge && \
+        apt-get clean && rm -rf /var/lib/apt/lists/* \
+        ;; \
+      false:*|auto:*) \
+        echo "Skipping Gazebo packages for target architecture ${TARGETARCH}" \
+        ;; \
+      *) \
+        echo "INSTALL_SIMULATION must be auto, true, or false" >&2; exit 2 \
+        ;; \
+    esac
+
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 # Install pip packages
 # pip install numpy==1.24.4
 RUN pip install --no-cache-dir \
@@ -78,4 +95,4 @@ RUN mkdir -p /root/icart_ws/src
 WORKDIR /root/icart_ws/src
 
 RUN echo 'source /root/icart_ws/src/icart_mini_ros2/docker/before_bringup.sh' >> ~/.bashrc
-RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select gazebo_ros_actor_plugin icart_mini_description icart_mini_leg_tracker"' >> ~/.bashrc
+RUN echo 'alias cm="cd ~/icart_ws && colcon build --symlink-install --packages-select icart_mini_description icart_mini_leg_tracker cugo_rs485_motor_control tang_control tang_bringup"' >> ~/.bashrc
