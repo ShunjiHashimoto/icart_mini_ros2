@@ -43,4 +43,4 @@ leg_cluster_tracking_node:
     static_frame_limit: 30
 
     # 追従対象または近距離障害物に近づきすぎたときに停止する距離[m]。
-    safety_stop_distance: 0.35
+    safety_stop_distance: 0.5
