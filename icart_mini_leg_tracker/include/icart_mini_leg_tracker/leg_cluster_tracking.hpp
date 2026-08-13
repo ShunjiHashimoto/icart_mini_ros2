@@ -255,6 +255,7 @@ private:
 
     // 計測
     rclcpp::Time last_callback_time_;
+    double control_dt_sec_;
     double accumulated_loop_period_;
     size_t loop_sample_count_;
 };

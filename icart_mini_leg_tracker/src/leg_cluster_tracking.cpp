@@ -19,6 +19,7 @@ LegClusterTracking::LegClusterTracking() :
     has_rejected_candidate_(false),
     marker_helper_(std::make_shared<MarkerHelper>(1000)), 
     csv_logger_(std::make_shared<CSVLogger>(FILENAME)),
+    control_dt_sec_(0.0),
     accumulated_loop_period_(0.0),
     loop_sample_count_(0)
     {
@@ -181,16 +182,20 @@ void LegClusterTracking::scanCallback(const sensor_msgs::msg::LaserScan::SharedP
     if (start_followme_flag == false) return;
     if (stop_by_joystick_ == true) return;
     auto current_time = this->get_clock()->now();
+    control_dt_sec_ = 0.0;
     if (last_callback_time_.nanoseconds() != 0) {
         double loop_period = (current_time - last_callback_time_).seconds();
-        accumulated_loop_period_ += loop_period;
-        loop_sample_count_++;
-        if (loop_sample_count_ >= LOOP_PERIOD_SAMPLE_WINDOW) {
-            double average_period = accumulated_loop_period_ / static_cast<double>(loop_sample_count_);
-            double frequency = (average_period > 1e-6) ? (1.0 / average_period) : 0.0;
-            RCLCPP_INFO(this->get_logger(), "scanCallback 平均周期: %.3f s (%.1f Hz)", average_period, frequency);
-            accumulated_loop_period_ = 0.0;
-            loop_sample_count_ = 0;
+        if (std::isfinite(loop_period) && loop_period > 0.0) {
+            control_dt_sec_ = loop_period;
+            accumulated_loop_period_ += loop_period;
+            loop_sample_count_++;
+            if (loop_sample_count_ >= LOOP_PERIOD_SAMPLE_WINDOW) {
+                double average_period = accumulated_loop_period_ / static_cast<double>(loop_sample_count_);
+                double frequency = (average_period > 1e-6) ? (1.0 / average_period) : 0.0;
+                RCLCPP_INFO(this->get_logger(), "scanCallback 平均周期: %.3f s (%.1f Hz)", average_period, frequency);
+                accumulated_loop_period_ = 0.0;
+                loop_sample_count_ = 0;
+            }
         }
     }
     last_callback_time_ = current_time;
@@ -1194,6 +1199,8 @@ void LegClusterTracking::resetFollowTarget() {
     next_cluster_id_ = 1;
     integral_dist = 0.0;
     integral_angle = 0.0;
+    control_dt_sec_ = 0.0;
+    last_callback_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
     target_id = -1;
     previous_target_id_ = -1;
     previous_second_id_ = -1;
@@ -1326,9 +1333,9 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
     double error_dist = target_distance - this->safety_stop_distance_;
     double error_angle = target_angle; // radian
     // 誤差の積分項を更新（上限制限付き）
-    integral_dist += error_dist;
+    integral_dist += error_dist * control_dt_sec_;
     integral_dist = std::clamp(integral_dist, -MAX_DIST_INTEGRAL, MAX_DIST_INTEGRAL);
-    integral_angle += error_angle;
+    integral_angle += error_angle * control_dt_sec_;
     integral_angle = std::clamp(integral_angle, -MAX_ANGLE_INTEGRAL, MAX_ANGLE_INTEGRAL);
     // RCLCPP_INFO(this->get_logger(), "誤差距離: %.2f, 誤差角度: %.2f", integral_dist, integral_angle);
     // PID計算
