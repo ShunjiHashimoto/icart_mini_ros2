@@ -44,7 +44,7 @@
 #define FOOT_PAIR_CENTER_GATE_DISTANCE 0.35 // 脚ペア中心と予測ターゲット位置の許容距離[m]
 #define FOOT_PAIR_MAX_LATERAL_DISTANCE 0.08 // 柱状障害物をsecond脚候補に混ぜないため、横方向に厳しく見る最大距離[m]
 #define STOP_DISTANCE_THRESHOLD 0.35 //[m]
-#define MAX_CLUSTER_DISTANCE 2.5 // クラスタとする距離範囲
+#define MAX_CLUSTER_DISTANCE 3.0 // クラスタとする距離範囲
 #define MOVEMENT_THRESHOLD 0.5 // 急激な移動と判定するしきい値[m]
 #define STATIC_SPEED_THRESHOLD 0.1 // 静止状態と判定するしきい値[m/s]
 #define STATIC_FRAME_LIMIT 30 // 静止状態と判定するフレーム数
