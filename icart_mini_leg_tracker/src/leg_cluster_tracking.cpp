@@ -89,6 +89,27 @@ void LegClusterTracking::loadTrackingParameters() {
         this->declare_parameter<int>("static_frame_limit", STATIC_FRAME_LIMIT);
     this->safety_stop_distance_ =
         this->declare_parameter<double>("safety_stop_distance", STOP_DISTANCE_THRESHOLD);
+    this->distance_aware_control_ =
+        this->declare_parameter<bool>("distance_aware_control", false);
+    this->control_reference_offset_x_m_ =
+        this->declare_parameter<double>("control_reference_offset_x_m", 0.0);
+    this->follow_control_config_.desired_sensor_distance_m = this->safety_stop_distance_;
+    this->follow_control_config_.near_enter_distance_m =
+        this->declare_parameter<double>("near_enter_distance_m", 0.55);
+    this->follow_control_config_.near_exit_distance_m =
+        this->declare_parameter<double>("near_exit_distance_m", 0.65);
+    this->follow_control_config_.align_start_angle_rad =
+        this->declare_parameter<double>("align_start_angle_rad", 5.0 * M_PI / 180.0);
+    this->follow_control_config_.align_stop_angle_rad =
+        this->declare_parameter<double>("align_stop_angle_rad", 3.0 * M_PI / 180.0);
+    this->follow_control_config_.extreme_angle_rad =
+        this->declare_parameter<double>("extreme_angle_rad", M_PI / 4.0);
+    this->follow_control_config_.max_linear_mps =
+        this->declare_parameter<double>("follow_max_linear_mps", MAX_SPEED);
+    this->follow_control_config_.min_linear_mps =
+        this->declare_parameter<double>("follow_min_linear_mps", MIN_SPEED);
+    this->follow_control_config_.max_angular_radps =
+        this->declare_parameter<double>("follow_max_angular_radps", MAX_TURN_SPEED);
     this->person_marker_inverted_ =
         this->declare_parameter<bool>("person_marker_inverted", false);
 
@@ -97,7 +118,7 @@ void LegClusterTracking::loadTrackingParameters() {
         "Tracking parameters loaded: reacquire_timeout=%.2f, gate=%.2f, "
         "jump_distance=%.2f, jump_angle=%.2f, leg_pair=[%.2f, %.2f], "
         "leg_center_gate=%.2f, leg_lateral_gate=%.2f, initial_region=(%.2f, %.2f), static=(%.2f, %d), "
-        "stop_distance=%.2f",
+        "stop_distance=%.2f, distance_aware=%s, reference_offset_x=%.2f",
         this->target_reacquire_timeout_,
         this->predicted_gate_distance_,
         this->max_target_distance_jump_,
@@ -110,7 +131,9 @@ void LegClusterTracking::loadTrackingParameters() {
         this->initial_target_max_abs_y_,
         this->static_speed_threshold_,
         this->static_frame_limit_,
-        this->safety_stop_distance_);
+        this->safety_stop_distance_,
+        this->distance_aware_control_ ? "true" : "false",
+        this->control_reference_offset_x_m_);
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -1201,6 +1224,7 @@ void LegClusterTracking::resetFollowTarget() {
     next_cluster_id_ = 1;
     integral_dist = 0.0;
     integral_angle = 0.0;
+    follow_control_state_ = icart_mini_leg_tracker::FollowControlState{};
     control_dt_sec_ = 0.0;
     last_callback_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
     target_id = -1;
@@ -1324,6 +1348,36 @@ void LegClusterTracking::publishCmdVel(double target_distance, double target_ang
         cmd_vel_publisher_->publish(cmd_msg);
         return;
     }
+
+    if (this->distance_aware_control_) {
+        const auto reference_target = icart_mini_leg_tracker::targetRelativeToReference(
+            target_distance,
+            target_angle,
+            this->control_reference_offset_x_m_);
+        const auto command = icart_mini_leg_tracker::calculateDistanceAwareFollowCommand(
+            target_distance,
+            reference_target.distance_m,
+            reference_target.angle_rad,
+            this->control_dt_sec_,
+            this->follow_control_state_,
+            this->follow_control_config_);
+        cmd_msg.linear.x = command.linear_mps;
+        cmd_msg.angular.z = command.angular_radps;
+        RCLCPP_INFO_THROTTLE(
+            this->get_logger(), *this->get_clock(), 1000,
+            "TANG follow sensor_d=%.2fm center_d=%.2fm center_angle=%.1fdeg "
+            "near=%s aligning=%s v=%.3fm/s w=%.1fdeg/s",
+            target_distance,
+            reference_target.distance_m,
+            reference_target.angle_rad * 180.0 / M_PI,
+            this->follow_control_state_.near_mode ? "true" : "false",
+            this->follow_control_state_.aligning ? "true" : "false",
+            command.linear_mps,
+            command.angular_radps * 180.0 / M_PI);
+        cmd_vel_publisher_->publish(cmd_msg);
+        return;
+    }
+
     // 31cm以内なら停止
     if (target_distance <= this->safety_stop_distance_) {
         // RCLCPP_INFO(this->get_logger(), "追従対象に到達！ 停止します。");

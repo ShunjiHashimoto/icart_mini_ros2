@@ -26,6 +26,7 @@
 #include <fstream>
 #include "icart_mini_leg_tracker/utils/marker_helper.hpp"
 #include "icart_mini_leg_tracker/utils/csv_logger.hpp"
+#include "icart_mini_leg_tracker/follow_control.hpp"
 #include "icart_mini_leg_tracker/msg/cluster_info.hpp"
 #include "icart_mini_leg_tracker/msg/cluster_info_array.hpp"
 
@@ -233,6 +234,10 @@ private:
     double static_speed_threshold_;
     int static_frame_limit_;
     double safety_stop_distance_;
+    bool distance_aware_control_;
+    double control_reference_offset_x_m_;
+    icart_mini_leg_tracker::FollowControlConfig follow_control_config_;
+    icart_mini_leg_tracker::FollowControlState follow_control_state_;
 
     // PID
     double prev_error_dist = 0.0, integral_dist = 0.0;

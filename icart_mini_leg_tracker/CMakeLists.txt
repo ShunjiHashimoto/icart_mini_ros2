@@ -93,6 +93,10 @@ if(BUILD_TESTING)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  add_executable(test_follow_control test/test_follow_control.cpp)
+  target_include_directories(test_follow_control PRIVATE include)
+  add_test(NAME test_follow_control COMMAND test_follow_control)
 endif()
 
 ament_package()
