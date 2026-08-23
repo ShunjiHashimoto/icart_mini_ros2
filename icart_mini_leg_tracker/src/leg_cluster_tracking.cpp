@@ -16,6 +16,7 @@ LegClusterTracking::LegClusterTracking() :
     follow_tracking_state_(FollowTrackingState::Idle),
     debug_tracking_state_("idle"),
     target_lost_timer_active_(false),
+    reacquire_timeout_paused_(false),
     has_rejected_candidate_(false),
     marker_helper_(std::make_shared<MarkerHelper>(1000)), 
     csv_logger_(std::make_shared<CSVLogger>(FILENAME)),
@@ -172,6 +173,10 @@ void LegClusterTracking::followControlCallback(const std_msgs::msg::String::Shar
         startFollowMe("/follow_me/control");
     } else if (command == "stop" || command == "follow_stop" || command == "g") {
         stopFollowMe("/follow_me/control");
+    } else if (command == "pause") {
+        setReacquireTimeoutPaused(true, "/follow_me/control");
+    } else if (command == "resume") {
+        setReacquireTimeoutPaused(false, "/follow_me/control");
     } else if (command == "emergency_stop" || command == "estop" || command == "space") {
         setEmergencyStop(true, "/follow_me/control");
     } else if (command == "clear_emergency_stop" || command == "clear_estop" || command == "clear" || command == "c") {
@@ -183,6 +188,7 @@ void LegClusterTracking::followControlCallback(const std_msgs::msg::String::Shar
 
 void LegClusterTracking::startFollowMe(const std::string &source) {
     resetFollowTarget();
+    reacquire_timeout_paused_ = false;
     start_followme_flag = true;
     setFollowTrackingState(FollowTrackingState::WaitingInitial);
     RCLCPP_WARN(this->get_logger(), "追従開始 (%s)", source.c_str());
@@ -191,11 +197,37 @@ void LegClusterTracking::startFollowMe(const std::string &source) {
 
 void LegClusterTracking::stopFollowMe(const std::string &source) {
     start_followme_flag = false;
+    reacquire_timeout_paused_ = false;
     resetFollowTarget();
     setFollowTrackingState(FollowTrackingState::Stopped);
     publishCmdVel(0.0, 0.0);
     RCLCPP_WARN(this->get_logger(), "追従停止 (%s)", source.c_str());
     publishLostState(true);
+}
+
+void LegClusterTracking::setReacquireTimeoutPaused(bool paused, const std::string &source) {
+    if (!start_followme_flag || reacquire_timeout_paused_ == paused) {
+        return;
+    }
+
+    reacquire_timeout_paused_ = paused;
+    publishCmdVel(0.0, 0.0);
+    if (paused) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "追従対象を保持したまま再捕捉タイマーを一時停止 (%s)",
+            source.c_str());
+        return;
+    }
+
+    if (target_lost_timer_active_) {
+        // 通信断中の経過時間をLost判定へ含めず、復旧後に猶予を与える。
+        target_lost_start_time_ = this->now();
+    }
+    RCLCPP_WARN(
+        this->get_logger(),
+        "追従対象を保持したまま再捕捉タイマーを再開 (%s)",
+        source.c_str());
 }
 
 void LegClusterTracking::setEmergencyStop(bool enabled, const std::string &source) {
@@ -1304,6 +1336,9 @@ double LegClusterTracking::lostElapsedSeconds() const {
 }
 
 bool LegClusterTracking::targetLostTimedOut() const {
+    if (reacquire_timeout_paused_) {
+        return false;
+    }
     const auto elapsed = lostElapsedSeconds();
     return elapsed >= this->target_reacquire_timeout_;
 }
@@ -1349,6 +1384,12 @@ void LegClusterTracking::saveDebugCsv() {
 
 void LegClusterTracking::publishCmdVel(double target_distance, double target_angle) {
     auto cmd_msg = geometry_msgs::msg::Twist();
+
+    // モーター通信断中は追跡計算だけを継続し、速度指令は常にゼロにする。
+    if (reacquire_timeout_paused_) {
+        cmd_vel_publisher_->publish(cmd_msg);
+        return;
+    }
 
     // ジョイスティックで停止が指示されたら何もしない
     if (stop_by_joystick_) {

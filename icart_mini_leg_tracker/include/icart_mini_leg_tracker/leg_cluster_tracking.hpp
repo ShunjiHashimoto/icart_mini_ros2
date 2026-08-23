@@ -111,6 +111,7 @@ private:
     void followControlCallback(const std_msgs::msg::String::SharedPtr msg);
     void startFollowMe(const std::string &source);
     void stopFollowMe(const std::string &source);
+    void setReacquireTimeoutPaused(bool paused, const std::string &source);
     void setEmergencyStop(bool enabled, const std::string &source);
 
     // データ処理関連
@@ -215,6 +216,7 @@ private:
     FollowTrackingState follow_tracking_state_;
     std::string debug_tracking_state_;
     bool target_lost_timer_active_;
+    bool reacquire_timeout_paused_;
     rclcpp::Time target_lost_start_time_;
     bool has_rejected_candidate_;
     geometry_msgs::msg::Point rejected_candidate_pos_;
