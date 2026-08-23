@@ -52,7 +52,7 @@
 #define LOST_ANGLE_JUMP (M_PI/2.0) // 大きく離れたとみなす角度変化[rad]
 #define REACQUIRE_MAX_ANGLE_DIFF (M_PI/2.0) // 再捕捉候補として許容する角度変化[rad]
 #define REACQUIRE_MAX_SPEED 5.0 // ID入れ替わり時の速度スパイクを許容し、明らかな異常値だけ除外する上限[m/s]
-#define LOOP_PERIOD_SAMPLE_WINDOW 50 // 平均周期を算出するフレーム数
+#define LOOP_PERIOD_SAMPLE_WINDOW 200 // 平均周期を算出するフレーム数
 #define INITIAL_TARGET_MAX_X 1.0 // 初期追従対象として採用する正面方向の最大距離[m]
 #define INITIAL_TARGET_MAX_ABS_Y 0.5 // 初期追従対象として採用する左右方向の最大距離[m]
 #define TARGET_LOST_TIMEOUT 1.0 // 一時ロストから最終Lostへ遷移するまでの待ち時間[s]
