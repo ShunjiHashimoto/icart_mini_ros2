@@ -30,6 +30,7 @@ int main()
   FollowControlConfig config;
   config.max_linear_mps = 0.15;
   config.max_angular_radps = 15.0 * M_PI / 180.0;
+  config.extreme_angular_radps = 25.0 * M_PI / 180.0;
 
   FollowControlState far_state;
   const auto far_command = calculateDistanceAwareFollowCommand(
@@ -61,7 +62,15 @@ int main()
   const auto extreme_command = calculateDistanceAwareFollowCommand(
     2.0, 2.3, 60.0 * M_PI / 180.0, 0.05, extreme_state, config);
   assert(near(extreme_command.linear_mps, 0.0));
-  assert(near(extreme_command.angular_radps, config.max_angular_radps));
+  assert(near(extreme_command.angular_radps, config.extreme_angular_radps));
+
+  FollowControlState near_extreme_state;
+  const auto near_extreme_command = calculateDistanceAwareFollowCommand(
+    0.55, 0.80, -60.0 * M_PI / 180.0, 0.05, near_extreme_state, config);
+  assert(near_extreme_state.near_mode);
+  assert(near_extreme_state.aligning);
+  assert(near(near_extreme_command.linear_mps, 0.0));
+  assert(near(near_extreme_command.angular_radps, -config.extreme_angular_radps));
 
   extreme_state.near_mode = true;
   extreme_state.aligning = true;

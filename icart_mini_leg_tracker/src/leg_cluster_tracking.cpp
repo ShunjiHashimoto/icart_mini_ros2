@@ -110,6 +110,10 @@ void LegClusterTracking::loadTrackingParameters() {
         this->declare_parameter<double>("follow_min_linear_mps", MIN_SPEED);
     this->follow_control_config_.max_angular_radps =
         this->declare_parameter<double>("follow_max_angular_radps", MAX_TURN_SPEED);
+    this->follow_control_config_.extreme_angular_radps =
+        this->declare_parameter<double>(
+            "follow_extreme_angular_radps",
+            this->follow_control_config_.max_angular_radps);
     this->person_marker_inverted_ =
         this->declare_parameter<bool>("person_marker_inverted", false);
 
@@ -118,7 +122,8 @@ void LegClusterTracking::loadTrackingParameters() {
         "Tracking parameters loaded: reacquire_timeout=%.2f, gate=%.2f, "
         "jump_distance=%.2f, jump_angle=%.2f, leg_pair=[%.2f, %.2f], "
         "leg_center_gate=%.2f, leg_lateral_gate=%.2f, initial_region=(%.2f, %.2f), static=(%.2f, %d), "
-        "stop_distance=%.2f, distance_aware=%s, reference_offset_x=%.2f",
+        "stop_distance=%.2f, distance_aware=%s, reference_offset_x=%.2f, "
+        "follow_turn=(normal=%.1fdeg/s, extreme>%.1fdeg=%.1fdeg/s)",
         this->target_reacquire_timeout_,
         this->predicted_gate_distance_,
         this->max_target_distance_jump_,
@@ -133,7 +138,10 @@ void LegClusterTracking::loadTrackingParameters() {
         this->static_frame_limit_,
         this->safety_stop_distance_,
         this->distance_aware_control_ ? "true" : "false",
-        this->control_reference_offset_x_m_);
+        this->control_reference_offset_x_m_,
+        this->follow_control_config_.max_angular_radps * 180.0 / M_PI,
+        this->follow_control_config_.extreme_angle_rad * 180.0 / M_PI,
+        this->follow_control_config_.extreme_angular_radps * 180.0 / M_PI);
 }
 
 void LegClusterTracking::joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg) {

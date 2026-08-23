@@ -18,6 +18,7 @@ struct FollowControlConfig
   double max_linear_mps = 0.25;
   double min_linear_mps = 0.05;
   double max_angular_radps = M_PI / 3.0;
+  double extreme_angular_radps = M_PI / 3.0;
   double distance_kp = 0.5;
   double distance_ki = 0.01;
   double angle_kp = 1.0;
@@ -84,6 +85,15 @@ inline FollowControlCommand calculateDistanceAwareFollowCommand(
   }
 
   const double abs_angle = std::fabs(reference_angle_rad);
+  if (abs_angle > config.extreme_angle_rad) {
+    state.distance_integral = 0.0;
+    state.aligning = state.near_mode;
+    command.angular_radps = std::copysign(
+      config.extreme_angular_radps,
+      reference_angle_rad);
+    return command;
+  }
+
   if (state.near_mode) {
     state.distance_integral = 0.0;
     if (state.aligning) {
@@ -117,12 +127,6 @@ inline FollowControlCommand calculateDistanceAwareFollowCommand(
     requested_linear,
     config.min_linear_mps,
     config.max_linear_mps);
-
-  if (abs_angle > config.extreme_angle_rad) {
-    command.linear_mps = 0.0;
-    command.angular_radps = std::copysign(config.max_angular_radps, reference_angle_rad);
-    return command;
-  }
 
   const double curvature = 2.0 * std::sin(reference_angle_rad) / reference_distance_m;
   command.angular_radps = std::clamp(
